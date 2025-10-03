@@ -268,6 +268,12 @@ app.get('/', (c) => {
             border: 2px solid #f59e0b !important;
           }
           
+          /* Mode admin */
+          .admin-mode {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: white;
+          }
+          
           .day-header { 
             background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
             color: white;
@@ -371,6 +377,50 @@ app.get('/', (c) => {
                     </button>
                 </div>
             </div>
+            
+            <!-- Bouton Mode Admin -->
+            <div class="text-center mb-6">
+                <button id="toggleAdminBtn" class="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors">
+                    <i class="fas fa-cog mr-2"></i>
+                    Mode Admin
+                </button>
+            </div>
+
+            <!-- Panneau d'administration (masqué par défaut) -->
+            <div id="adminPanel" class="hidden admin-mode rounded-lg shadow-md p-4 lg:p-6 mb-6">
+                <h2 class="text-xl font-semibold mb-4">
+                    <i class="fas fa-tools mr-2"></i>
+                    Administration
+                </h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <button id="addActivityBtn" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors">
+                        <i class="fas fa-plus-circle mr-2"></i>
+                        Ajouter Activité/Planning
+                    </button>
+                    <button id="undoBtn" class="px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 transition-colors" disabled>
+                        <i class="fas fa-undo mr-2"></i>
+                        Annuler
+                    </button>
+                    <button id="redoBtn" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors" disabled>
+                        <i class="fas fa-redo mr-2"></i>
+                        Refaire
+                    </button>
+                    <button id="historyBtn" class="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors">
+                        <i class="fas fa-history mr-2"></i>
+                        Historique
+                    </button>
+                </div>
+                
+                <div class="mt-4 p-3 bg-yellow-100 border border-yellow-300 rounded text-sm">
+                    <i class="fas fa-info-circle mr-2 text-yellow-600"></i>
+                    <strong>Mode Admin activé :</strong> Glisser-déposer pour déplacer les activités • Boutons X pour supprimer les semaines • Gestion des urgences
+                </div>
+            </div>
+
+            <!-- Message d'erreur -->
+            <div id="errorMessage" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
+                <span id="errorText"></span>
+            </div>
 
             <!-- Calendrier -->
             <div id="calendar" class="space-y-6">
@@ -387,7 +437,69 @@ app.get('/', (c) => {
         <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
         <script>
             let currentUser = null;
+            let isAdminMode = false;
             let schedule = [];
+            
+            // Classe pour gérer l'historique des actions
+            class ActionHistory {
+                constructor() {
+                    this.actions = [];
+                    this.currentIndex = -1;
+                    this.maxSize = 50;
+                }
+                
+                addAction(action) {
+                    // Supprimer les actions après l'index actuel si on en ajoute une nouvelle
+                    this.actions = this.actions.slice(0, this.currentIndex + 1);
+                    
+                    // Ajouter la nouvelle action
+                    this.actions.push({
+                        ...action,
+                        timestamp: new Date(),
+                        id: Date.now()
+                    });
+                    
+                    this.currentIndex++;
+                    
+                    // Limiter la taille
+                    if (this.actions.length > this.maxSize) {
+                        this.actions.shift();
+                        this.currentIndex--;
+                    }
+                }
+                
+                canUndo() {
+                    return this.currentIndex >= 0;
+                }
+                
+                canRedo() {
+                    return this.currentIndex < this.actions.length - 1;
+                }
+                
+                undo() {
+                    if (this.canUndo()) {
+                        const action = this.actions[this.currentIndex];
+                        this.currentIndex--;
+                        return action;
+                    }
+                    return null;
+                }
+                
+                redo() {
+                    if (this.canRedo()) {
+                        this.currentIndex++;
+                        const action = this.actions[this.currentIndex];
+                        return action;
+                    }
+                    return null;
+                }
+                
+                getHistory() {
+                    return this.actions.slice().reverse();
+                }
+            }
+            
+            const actionHistory = new ActionHistory();
 
             document.addEventListener('DOMContentLoaded', async () => {
                 loadUserFromStorage();
@@ -437,6 +549,19 @@ app.get('/', (c) => {
                 document.getElementById('userName').addEventListener('keypress', (e) => {
                     if (e.key === 'Enter') validateName();
                 });
+
+                document.getElementById('toggleAdminBtn').addEventListener('click', toggleAdminMode);
+                
+                // Admin panel buttons
+                document.getElementById('addActivityBtn').addEventListener('click', () => {
+                    showError('Fonctionnalité à venir dans la prochaine étape');
+                });
+                document.getElementById('undoBtn').addEventListener('click', undoAction);
+                document.getElementById('redoBtn').addEventListener('click', redoAction);
+                document.getElementById('historyBtn').addEventListener('click', openHistoryModal);
+                
+                // Update undo/redo buttons only when needed
+                updateUndoRedoButtons();
             }
             
             function validateName() {
@@ -452,12 +577,41 @@ app.get('/', (c) => {
             }
 
             function showError(message) {
-                updateNameStatus(message, 'text-red-600');
-                setTimeout(() => {
-                    if (currentUser) {
-                        updateNameStatus('Connecte en tant que: ' + currentUser, 'text-green-600');
-                    }
-                }, 3000);
+                const errorDiv = document.getElementById('errorMessage');
+                document.getElementById('errorText').textContent = message;
+                errorDiv.classList.remove('hidden');
+                setTimeout(() => errorDiv.classList.add('hidden'), 5000);
+            }
+
+            function toggleAdminMode() {
+                if (!currentUser) {
+                    showError('Veuillez dabord saisir votre nom');
+                    return;
+                }
+
+                isAdminMode = !isAdminMode;
+                const adminPanel = document.getElementById('adminPanel');
+                const toggleBtn = document.getElementById('toggleAdminBtn');
+
+                if (isAdminMode) {
+                    adminPanel.classList.remove('hidden');
+                    toggleBtn.textContent = 'Quitter Mode Admin';
+                    toggleBtn.className = 'px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors';
+                    
+                    // Ajouter action dans l'historique
+                    actionHistory.addAction({
+                        type: 'admin_mode_enabled',
+                        data: { user: currentUser },
+                        undoData: null
+                    });
+                } else {
+                    adminPanel.classList.add('hidden');
+                    toggleBtn.innerHTML = '<i class="fas fa-cog mr-2"></i>Mode Admin';
+                    toggleBtn.className = 'px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors';
+                }
+
+                updateUndoRedoButtons();
+                renderCalendar();
             }
 
 
@@ -650,12 +804,24 @@ app.get('/', (c) => {
                     });
 
                     if (response.data.success) {
-                        // Mettre à jour localement pour un feedback immédiat
+                        // Sauvegarder l'état avant changement pour l'historique
                         const slot = schedule.find(s => s.id == slotId);
+                        const oldState = slot ? { ...slot } : null;
+                        
+                        // Mettre à jour localement
                         if (slot) {
                             slot.volunteer_name = null;
                             slot.status = 'available';
                         }
+                        
+                        // Ajouter à l'historique
+                        actionHistory.addAction({
+                            type: 'unassign_slot',
+                            data: { slotId: slotId, user: currentUser },
+                            undoData: oldState
+                        });
+                        
+                        updateUndoRedoButtons();
                         renderCalendar();
                     } else {
                         showError('Erreur: ' + response.data.error);
@@ -664,6 +830,111 @@ app.get('/', (c) => {
                     console.error('Erreur:', error);
                     showError('Erreur lors de la desinscription');
                 }
+            }
+
+            // === FONCTIONS UNDO/REDO ===
+
+            async function undoAction() {
+                try {
+                    const action = actionHistory.undo();
+                    if (!action) return;
+
+                    // Simuler l'annulation (en mode développement)
+                    showError('Action annulee: ' + action.type);
+                    updateUndoRedoButtons();
+                    
+                    // En production, ici on ferait l'appel API pour annuler
+                    // await axios.post('/api/undo');
+                    
+                } catch (error) {
+                    console.error('Erreur:', error);
+                    showError('Erreur lors de annulation');
+                }
+            }
+
+            async function redoAction() {
+                try {
+                    const action = actionHistory.redo();
+                    if (!action) return;
+
+                    // Simuler la restauration (en mode développement)
+                    showError('Action restauree: ' + action.type);
+                    updateUndoRedoButtons();
+                    
+                    // En production, ici on ferait l'appel API pour restaurer
+                    // await axios.post('/api/redo');
+                    
+                } catch (error) {
+                    console.error('Erreur:', error);
+                    showError('Erreur lors de la restauration');
+                }
+            }
+
+            function updateUndoRedoButtons() {
+                if (!isAdminMode) return;
+                
+                const undoBtn = document.getElementById('undoBtn');
+                const redoBtn = document.getElementById('redoBtn');
+                
+                if (undoBtn && redoBtn) {
+                    const canUndo = actionHistory.canUndo();
+                    const canRedo = actionHistory.canRedo();
+                    
+                    undoBtn.disabled = !canUndo;
+                    undoBtn.className = canUndo ?
+                        'px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 transition-colors' :
+                        'px-4 py-2 bg-gray-300 text-gray-500 rounded cursor-not-allowed';
+                        
+                    redoBtn.disabled = !canRedo;
+                    redoBtn.className = canRedo ?
+                        'px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors' :
+                        'px-4 py-2 bg-gray-300 text-gray-500 rounded cursor-not-allowed';
+                }
+            }
+
+            function openHistoryModal() {
+                const history = actionHistory.getHistory();
+                let historyHtml = '<div class="space-y-2">';
+                
+                if (history.length === 0) {
+                    historyHtml += '<p class="text-gray-500 text-center py-4">Aucun historique</p>';
+                } else {
+                    history.forEach((action, index) => {
+                        const timeStr = action.timestamp.toLocaleTimeString('fr-FR');
+                        historyHtml += 
+                            '<div class="p-3 bg-gray-50 rounded border">' +
+                                '<div class="font-medium">' + action.type + '</div>' +
+                                '<div class="text-sm text-gray-500">' + timeStr + '</div>' +
+                            '</div>';
+                    });
+                }
+                
+                historyHtml += '</div>';
+                
+                // Créer une modal simple pour l'historique
+                const modal = document.createElement('div');
+                modal.className = 'fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4';
+                modal.innerHTML = 
+                    '<div class="bg-white rounded-lg shadow-xl max-w-md w-full max-h-96 overflow-y-auto">' +
+                        '<div class="p-6">' +
+                            '<div class="flex justify-between items-center mb-4">' +
+                                '<h3 class="text-lg font-semibold">Historique des Actions</h3>' +
+                                '<button onclick="this.closest(\\'.fixed\\').remove()" class="text-gray-400 hover:text-gray-600">' +
+                                    '<i class="fas fa-times text-xl"></i>' +
+                                '</button>' +
+                            '</div>' +
+                            historyHtml +
+                        '</div>' +
+                    '</div>';
+                
+                document.body.appendChild(modal);
+                
+                // Fermer en cliquant à l'extérieur
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) {
+                        document.body.removeChild(modal);
+                    }
+                });
             }
 
             // Utilitaires
