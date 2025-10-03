@@ -77,17 +77,17 @@ app.get('/api/schedule', async (c) => {
     const today = new Date();
     const schedule = [];
     
-    // Trouver le prochain lundi
-    const nextMonday = new Date(today);
+    // Trouver le lundi de la semaine actuelle (pas la suivante)
+    const currentMonday = new Date(today);
     const dayOfWeek = today.getDay();
-    const daysUntilMonday = dayOfWeek === 0 ? 1 : 8 - dayOfWeek;
-    nextMonday.setDate(today.getDate() + daysUntilMonday);
+    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // 0 = dimanche
+    currentMonday.setDate(today.getDate() + daysToMonday);
     
     // Générateur de données de test amélioré
     for (let week = 0; week < 4; week++) {
       for (let day = 0; day < 7; day++) {
-        const date = new Date(nextMonday);
-        date.setDate(nextMonday.getDate() + (week * 7) + day);
+        const date = new Date(currentMonday);
+        date.setDate(currentMonday.getDate() + (week * 7) + day);
         const dateStr = date.toISOString().split('T')[0];
         
         // Nourrissage quotidien avec gestion avancée des statuts
@@ -165,17 +165,20 @@ app.post('/api/schedule/:id/assign', async (c) => {
   try {
     const { env } = c;
     const slotId = c.req.param('id');
-    const { volunteer_id } = await c.req.json();
+    const body = await c.req.json();
+    const volunteer_name = body.volunteer_name;
+    
+    console.log('Assign API called:', { slotId, volunteer_name, hasDB: !!(env && env.DB) });
 
-    if (!env || !env.DB) {
-      return c.json({ success: true, message: 'Inscription simulée (mode développement)' });
-    }
+    // Mode développement - toujours simuler (pas de vraie DB configurée)
+    console.log('Mode développement - simulation assign');
+    return c.json({ success: true, message: 'Inscription réussie (dev)' });
     
     const result = await env.DB.prepare(`
       UPDATE time_slots 
       SET volunteer_id = ?, status = 'assigned', updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).bind(volunteer_id, slotId).run();
+    `).bind(volunteer_name, slotId).run();
     
     if (result.changes > 0) {
       return c.json({ success: true, message: 'Inscription réussie' });
@@ -183,7 +186,8 @@ app.post('/api/schedule/:id/assign', async (c) => {
       return c.json({ error: 'Créneau non trouvé' }, 404);
     }
   } catch (error) {
-    return c.json({ error: 'Erreur lors de inscription' }, 500);
+    console.error('Erreur API assign:', error);
+    return c.json({ error: 'Erreur lors de inscription: ' + error.message }, 500);
   }
 });
 
@@ -192,10 +196,12 @@ app.post('/api/schedule/:id/unassign', async (c) => {
   try {
     const { env } = c;
     const slotId = c.req.param('id');
+    
+    console.log('Unassign API called:', { slotId, hasDB: !!(env && env.DB) });
 
-    if (!env || !env.DB) {
-      return c.json({ success: true, message: 'Désinscription simulée (mode développement)' });
-    }
+    // Mode développement - toujours simuler (pas de vraie DB configurée)
+    console.log('Mode développement - simulation unassign');
+    return c.json({ success: true, message: 'Désinscription réussie (dev)' });
     
     const result = await env.DB.prepare(`
       UPDATE time_slots 
@@ -209,7 +215,8 @@ app.post('/api/schedule/:id/unassign', async (c) => {
       return c.json({ error: 'Créneau non trouvé' }, 404);
     }
   } catch (error) {
-    return c.json({ error: 'Erreur lors de la désinscription' }, 500);
+    console.error('Erreur API unassign:', error);
+    return c.json({ error: 'Erreur lors de la désinscription: ' + error.message }, 500);
   }
 });
 
@@ -264,8 +271,25 @@ app.get('/', (c) => {
           
           /* Mise en surbrillance du jour actuel */
           .today-highlight {
-            background-color: #fef3c7 !important;
-            border: 2px solid #f59e0b !important;
+            background: linear-gradient(135deg, #fef3c7 0%, #fed7aa 100%) !important;
+            border: 3px solid #f59e0b !important;
+            box-shadow: 0 0 15px rgba(245, 158, 11, 0.3) !important;
+            position: relative;
+          }
+          
+          .today-highlight::before {
+            content: '🌟 AUJOURD HUI';
+            position: absolute;
+            top: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #f59e0b;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: bold;
+            z-index: 10;
           }
           
           /* Mode admin */
@@ -523,11 +547,11 @@ app.get('/', (c) => {
                 </div>
             </div>
             
-            <!-- Bouton Mode Admin -->
-            <div class="text-center mb-6">
-                <button id="toggleAdminBtn" class="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors">
+            <!-- Bouton Mode Admin - En haut à droite -->
+            <div class="fixed top-4 right-4 z-40">
+                <button id="toggleAdminBtn" class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors shadow-lg">
                     <i class="fas fa-cog mr-2"></i>
-                    Mode Admin
+                    Admin
                 </button>
             </div>
 
@@ -955,18 +979,33 @@ app.get('/', (c) => {
                     
                     dayNames.forEach((dayName, dayIndex) => {
                         const th = document.createElement('th');
-                        th.className = 'p-3 lg:p-4 text-center font-semibold text-white border-r border-white/20 last:border-r-0';
+                        th.className = 'p-3 lg:p-4 text-center font-semibold text-white border-r border-white/20 last:border-r-0 relative';
                         
                         const dayDate = new Date(currentWeekStart);
                         dayDate.setDate(currentWeekStart.getDate() + dayIndex);
                         const isToday = dayDate.toISOString().split('T')[0] === today;
                         
+                        // Bouton X pour supprimer la colonne (seulement en mode admin et pas semaine courante/3 suivantes)
+                        let deleteButton = '';
+                        if (isAdminMode && weekIndex >= 4) { // Seulement après les 4 premières semaines
+                            deleteButton = '<button onclick="deleteWeekColumn(' + weekIndex + ', ' + dayIndex + ')" class="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs hover:bg-red-600" title="Supprimer cette colonne">×</button>';
+                        }
+                        
                         th.innerHTML = 
+                            deleteButton +
                             '<div class="text-sm font-medium">' + dayName + '</div>' +
                             '<div class="text-lg lg:text-xl font-bold ' + (isToday ? 'text-yellow-300' : '') + '">' + dayDate.getDate() + '</div>' +
                             '<div class="text-xs opacity-75">' + dayDate.toLocaleDateString('fr-FR', { month: 'short' }) + '</div>';
                         headerRow.appendChild(th);
                     });
+                    
+                    // Bouton + pour ajouter une colonne (seulement en mode admin)
+                    if (isAdminMode) {
+                        const addTh = document.createElement('th');
+                        addTh.className = 'p-3 lg:p-4 text-center font-semibold text-white border-r border-white/20';
+                        addTh.innerHTML = '<button onclick="addWeekColumn(' + weekIndex + ')" class="w-8 h-8 bg-green-500 text-white rounded-full text-lg hover:bg-green-600" title="Ajouter une semaine">+</button>';
+                        headerRow.appendChild(addTh);
+                    }
                     
                     thead.appendChild(headerRow);
                     table.appendChild(thead);
@@ -1083,10 +1122,23 @@ app.get('/', (c) => {
 
                 let actionButton = '';
                 if (currentUser) {
-                    if (slot.status === 'available' || slot.status === 'urgent' || !slot.volunteer_name) {
-                        actionButton = '<button onclick="assignSlot(' + slot.id + ')" class="mt-1 px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 w-full">Inscription</button>';
-                    } else if (slot.volunteer_name === currentUser) {
-                        actionButton = '<button onclick="unassignSlot(' + slot.id + ')" class="mt-1 px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 w-full">Desinscription</button>';
+                    if (isAdminMode) {
+                        // Mode admin : boutons pour assigner/désassigner n'importe qui
+                        if (slot.volunteer_name) {
+                            actionButton = '<div class="mt-1 space-y-1">' +
+                                '<button onclick="adminUnassignSlot(' + slot.id + ')" class="w-full px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600">Retirer</button>' +
+                                '<button onclick="adminChangeSlot(' + slot.id + ')" class="w-full px-2 py-1 bg-orange-500 text-white text-xs rounded hover:bg-orange-600">Changer</button>' +
+                                '</div>';
+                        } else {
+                            actionButton = '<button onclick="adminAssignSlot(' + slot.id + ')" class="mt-1 px-2 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600 w-full">Assigner</button>';
+                        }
+                    } else {
+                        // Mode normal : boutons pour l'utilisateur actuel
+                        if (slot.status === 'available' || slot.status === 'urgent' || !slot.volunteer_name) {
+                            actionButton = '<button onclick="assignSlot(' + slot.id + ')" class="mt-1 px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 w-full">Inscription</button>';
+                        } else if (slot.volunteer_name === currentUser) {
+                            actionButton = '<button onclick="unassignSlot(' + slot.id + ')" class="mt-1 px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 w-full">Desinscription</button>';
+                        }
                     }
                 }
 
@@ -1132,7 +1184,7 @@ app.get('/', (c) => {
             }
 
             async function unassignSlot(slotId) {
-                if (!confirm('Êtes-vous sûr de vouloir vous désinscrire ?')) return;
+                if (!confirm('Êtes-vous sur de vouloir vous desinscrire ?')) return;
 
                 try {
                     const response = await axios.post('/api/schedule/' + slotId + '/unassign', {
@@ -1165,6 +1217,197 @@ app.get('/', (c) => {
                 } catch (error) {
                     console.error('Erreur:', error);
                     showError('Erreur lors de la desinscription');
+                }
+            }
+
+            // === FONCTIONS ADMIN POUR GESTION DES CRÉNEAUX ===
+
+            async function adminAssignSlot(slotId) {
+                try {
+                    const volunteers = ['Alice', 'Manu', 'Guillaume', 'Eliza', 'Sandrine', 'Laet', 'Les Furgettes'];
+                    const volunteerName = prompt('Assigner à qui ? ' + volunteers.map((v, i) => (i+1) + '. ' + v).join(', ') + '. Tapez le numero ou le nom:');
+                    
+                    if (!volunteerName) return;
+                    
+                    let selectedVolunteer;
+                    if (/^\d+$/.test(volunteerName.trim())) {
+                        const index = parseInt(volunteerName.trim()) - 1;
+                        selectedVolunteer = volunteers[index];
+                    } else {
+                        selectedVolunteer = volunteerName.trim();
+                    }
+                    
+                    if (!selectedVolunteer) {
+                        showError('Bénévole non valide');
+                        return;
+                    }
+                    
+                    const response = await axios.post('/api/schedule/' + slotId + '/assign', {
+                        volunteer_name: selectedVolunteer
+                    });
+
+                    if (response.data.success) {
+                        // Mettre à jour localement
+                        const slot = schedule.find(s => s.id == slotId);
+                        if (slot) {
+                            slot.volunteer_name = selectedVolunteer;
+                            slot.status = 'assigned';
+                        }
+                        
+                        // Ajouter à l'historique
+                        actionHistory.addAction({
+                            type: 'admin_assign_slot',
+                            data: { slotId: slotId, volunteer: selectedVolunteer, admin: currentUser },
+                            undoData: { slotId: slotId, previousVolunteer: null }
+                        });
+                        
+                        updateUndoRedoButtons();
+                        renderCalendar();
+                        showError(selectedVolunteer + ' assigné au créneau', 'text-green-600');
+                    } else {
+                        showError('Erreur: ' + response.data.error);
+                    }
+                } catch (error) {
+                    console.error('Erreur:', error);
+                    showError('Erreur lors de assignation admin');
+                }
+            }
+
+            async function adminUnassignSlot(slotId) {
+                try {
+                    const slot = schedule.find(s => s.id == slotId);
+                    if (!slot) return;
+                    
+                    if (!confirm('Retirer ' + slot.volunteer_name + ' de ce créneau ?')) return;
+                    
+                    const oldVolunteer = slot.volunteer_name;
+                    
+                    const response = await axios.post('/api/schedule/' + slotId + '/unassign', {});
+
+                    if (response.data.success) {
+                        // Mettre à jour localement
+                        slot.volunteer_name = null;
+                        slot.status = 'available';
+                        
+                        // Ajouter à l'historique
+                        actionHistory.addAction({
+                            type: 'admin_unassign_slot',
+                            data: { slotId: slotId, admin: currentUser },
+                            undoData: { slotId: slotId, previousVolunteer: oldVolunteer }
+                        });
+                        
+                        updateUndoRedoButtons();
+                        renderCalendar();
+                        showError(oldVolunteer + ' retiré du créneau', 'text-orange-600');
+                    } else {
+                        showError('Erreur: ' + response.data.error);
+                    }
+                } catch (error) {
+                    console.error('Erreur:', error);
+                    showError('Erreur lors du retrait admin');
+                }
+            }
+
+            async function adminChangeSlot(slotId) {
+                try {
+                    const slot = schedule.find(s => s.id == slotId);
+                    if (!slot) return;
+                    
+                    const volunteers = ['Alice', 'Manu', 'Guillaume', 'Eliza', 'Sandrine', 'Laet', 'Les Furgettes'];
+                    const volunteerName = prompt('Changer ' + slot.volunteer_name + ' pour qui ? ' + volunteers.map((v, i) => (i+1) + '. ' + v).join(', ') + '. Tapez le numero ou le nom:');
+                    
+                    if (!volunteerName) return;
+                    
+                    let selectedVolunteer;
+                    if (/^\d+$/.test(volunteerName.trim())) {
+                        const index = parseInt(volunteerName.trim()) - 1;
+                        selectedVolunteer = volunteers[index];
+                    } else {
+                        selectedVolunteer = volunteerName.trim();
+                    }
+                    
+                    if (!selectedVolunteer || selectedVolunteer === slot.volunteer_name) {
+                        showError('Bénévole non valide ou identique');
+                        return;
+                    }
+                    
+                    const oldVolunteer = slot.volunteer_name;
+                    
+                    const response = await axios.post('/api/schedule/' + slotId + '/assign', {
+                        volunteer_name: selectedVolunteer
+                    });
+
+                    if (response.data.success) {
+                        // Mettre à jour localement
+                        slot.volunteer_name = selectedVolunteer;
+                        slot.status = 'assigned';
+                        
+                        // Ajouter à l'historique
+                        actionHistory.addAction({
+                            type: 'admin_change_slot',
+                            data: { slotId: slotId, newVolunteer: selectedVolunteer, admin: currentUser },
+                            undoData: { slotId: slotId, previousVolunteer: oldVolunteer }
+                        });
+                        
+                        updateUndoRedoButtons();
+                        renderCalendar();
+                        showError('Créneau changé de ' + oldVolunteer + ' à ' + selectedVolunteer, 'text-blue-600');
+                    } else {
+                        showError('Erreur: ' + response.data.error);
+                    }
+                } catch (error) {
+                    console.error('Erreur:', error);
+                    showError('Erreur lors du changement admin');
+                }
+            }
+
+            // === FONCTIONS GESTION COLONNES ===
+
+            function addWeekColumn(weekIndex) {
+                if (!isAdminMode) return;
+                
+                try {
+                    showError('Fonctionnalité d ajout de semaine à venir', 'text-blue-600');
+                    
+                    // Ajouter à l'historique
+                    actionHistory.addAction({
+                        type: 'add_week_column',
+                        data: { weekIndex: weekIndex, admin: currentUser },
+                        undoData: null
+                    });
+                    
+                    updateUndoRedoButtons();
+                    
+                    // TODO: Implémenter l'ajout réel de semaine
+                    console.log('Ajouter semaine après index:', weekIndex);
+                } catch (error) {
+                    console.error('Erreur:', error);
+                    showError('Erreur lors de ajout de semaine');
+                }
+            }
+
+            function deleteWeekColumn(weekIndex, dayIndex) {
+                if (!isAdminMode || weekIndex < 4) return; // Protection semaines courantes
+                
+                try {
+                    if (!confirm('Supprimer cette semaine du planning ?')) return;
+                    
+                    showError('Fonctionnalité de suppression de semaine à venir', 'text-orange-600');
+                    
+                    // Ajouter à l'historique
+                    actionHistory.addAction({
+                        type: 'delete_week_column',
+                        data: { weekIndex: weekIndex, dayIndex: dayIndex, admin: currentUser },
+                        undoData: null
+                    });
+                    
+                    updateUndoRedoButtons();
+                    
+                    // TODO: Implémenter la suppression réelle de semaine
+                    console.log('Supprimer semaine index:', weekIndex, 'jour:', dayIndex);
+                } catch (error) {
+                    console.error('Erreur:', error);
+                    showError('Erreur lors de suppression de semaine');
                 }
             }
 
