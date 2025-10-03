@@ -582,7 +582,7 @@ app.get('/', (c) => {
                     </button>
                 </div>
                 
-                <div class="mt-4 p-3 bg-yellow-100 border border-yellow-300 rounded text-sm">
+                <div class="mt-4 p-3 bg-yellow-100 border border-yellow-300 rounded text-sm text-black">
                     <i class="fas fa-info-circle mr-2 text-yellow-600"></i>
                     <strong>Mode Admin activé :</strong> Glisser-déposer pour déplacer les activités • Boutons X pour supprimer les semaines • Gestion des urgences
                 </div>
@@ -1051,7 +1051,7 @@ app.get('/', (c) => {
                 
                 renderTimeout = setTimeout(() => {
                     renderCalendarInternal();
-                }, 10);
+                }, 1);
             }
             
             function renderCalendarInternal() {
@@ -1963,8 +1963,11 @@ app.get('/', (c) => {
                     const dayOfWeek = activityDate.getDay() === 0 ? 7 : activityDate.getDay(); // Dimanche = 7, Lundi = 1
                     
                     // Générer un ID unique pour éviter les collisions
-                    const maxExistingId = schedule.length > 0 ? Math.max(...schedule.map(s => s.id)) : 0;
-                    const newId = Math.max(Date.now(), maxExistingId + 1);
+                    let newId = Date.now();
+                    // Ajouter un petit délai pour éviter les collisions en cas de clics rapides
+                    while (schedule.find(s => s.id === newId)) {
+                        newId += 1;
+                    }
                     
                     // Créer la nouvelle activité
                     const newActivity = {
