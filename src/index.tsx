@@ -1518,6 +1518,13 @@ app.get('/', (c) => {
                     const currentMonday = new Date(today);
                     currentMonday.setDate(today.getDate() - today.getDay() + 1);
                     
+                    // Récupérer les activités légumes de la semaine précédente pour les copier
+                    const previousWeekIndex = newWeekIndex - 1;
+                    const previousWeekVegetables = schedule.filter(slot => 
+                        Math.floor(slot.id / 20) === previousWeekIndex && 
+                        slot.activity_type === 'Légumes'
+                    );
+                    
                     // Générer les activités pour la nouvelle semaine
                     const newActivities = [];
                     
@@ -1526,47 +1533,42 @@ app.get('/', (c) => {
                         date.setDate(currentMonday.getDate() + (newWeekIndex * 7) + day);
                         const dateStr = date.toISOString().split('T')[0];
                         
-                        // Nourrissage quotidien
+                        // Nourrissage quotidien - TOUJOURS NON-URGENT pour semaines vierges
                         const nourrissageId = newWeekIndex * 20 + day + 1;
-                        let nourrissageVolunteer = null;
-                        let nourrissageStatus = 'available';
-                        
-                        // Logique d'assignation similaire aux semaines existantes
-                        if (day === 1 || day === 6) { // Mardi et dimanche
-                            if (Math.random() > 0.5) {
-                                nourrissageVolunteer = ['Alice', 'Les Furgettes'][Math.floor(Math.random() * 2)];
-                                nourrissageStatus = 'assigned';
-                            }
-                        }
                         
                         const nourrissageActivity = {
                             id: nourrissageId,
                             date: dateStr,
                             day_of_week: day + 1,
                             activity_type: 'Nourrissage',
-                            volunteer_name: nourrissageVolunteer,
-                            status: nourrissageStatus,
+                            volunteer_name: null,  // Toujours libre pour semaines vierges
+                            status: 'available',   // Toujours disponible
                             color: '#dc3545',
                             max_volunteers: 1,
                             notes: '',
-                            is_urgent_when_free: day === 0 || day === 3 // Lundi et jeudi urgents
+                            is_urgent_when_free: false  // JAMAIS urgent pour semaines vierges
                         };
                         
                         newActivities.push(nourrissageActivity);
                         
-                        // Légumes le mardi occasionnellement
-                        if (day === 1 && Math.random() > 0.3) {
+                        // Copier les légumes de la semaine précédente si ils existent
+                        const previousVegetableForDay = previousWeekVegetables.find(veg => 
+                            veg.day_of_week === (day + 1)
+                        );
+                        
+                        if (previousVegetableForDay) {
                             const legumesActivity = {
                                 id: newWeekIndex * 20 + day + 10,
                                 date: dateStr,
                                 day_of_week: day + 1,
                                 activity_type: 'Légumes',
-                                volunteer_name: Math.random() > 0.5 ? 'Clement' : null,
-                                status: Math.random() > 0.5 ? 'assigned' : 'available',
+                                volunteer_name: null,  // Toujours libre pour semaines vierges
+                                status: 'available',   // Toujours disponible
                                 color: '#ffc107',
-                                max_volunteers: 2,
-                                notes: '',
-                                is_urgent_when_free: false
+                                max_volunteers: previousVegetableForDay.max_volunteers || 2,
+                                notes: previousVegetableForDay.notes || '',
+                                time: previousVegetableForDay.time || '',
+                                is_urgent_when_free: false  // JAMAIS urgent pour semaines vierges
                             };
                             
                             newActivities.push(legumesActivity);
@@ -1591,7 +1593,12 @@ app.get('/', (c) => {
                     renderCalendar();
                     updateUndoRedoButtons();
                     
-                    showError('Nouvelle semaine ' + (newWeekIndex + 1) + ' ajoutée avec ' + newActivities.length + ' activités', 'text-green-600');
+                    const vegetablesCopied = newActivities.filter(a => a.activity_type === 'Légumes').length;
+                    let message = 'Nouvelle semaine ' + (newWeekIndex + 1) + ' ajoutée (vierge) avec ' + newActivities.length + ' activités';
+                    if (vegetablesCopied > 0) {
+                        message += ' - ' + vegetablesCopied + ' créneaux légumes copiés de la semaine précédente';
+                    }
+                    showError(message, 'text-green-600');
                     
                 } catch (error) {
                     console.error('Erreur:', error);
@@ -1600,27 +1607,69 @@ app.get('/', (c) => {
             }
 
             function deleteWeekRow(weekIndex) {
-                if (!isAdminMode || weekIndex < 4) return; // Protection semaines courantes
+                if (!isAdminMode) {
+                    showError('Seuls les administrateurs peuvent supprimer des semaines');
+                    return;
+                }
+                
+                if (weekIndex < 4) {
+                    showError('Impossible de supprimer la semaine courante et les 3 semaines suivantes');
+                    return;
+                }
                 
                 try {
-                    if (!confirm('Supprimer cette semaine complète du planning ?')) return;
+                    // Calculer les dates de la semaine à supprimer pour un message informatif
+                    const today = new Date();
+                    const currentMonday = new Date(today);
+                    currentMonday.setDate(today.getDate() - today.getDay() + 1);
+                    const weekStartDate = new Date(currentMonday);
+                    weekStartDate.setDate(currentMonday.getDate() + (weekIndex * 7));
+                    const weekEndDate = new Date(weekStartDate);
+                    weekEndDate.setDate(weekStartDate.getDate() + 6);
                     
-                    showError('Fonctionnalité de suppression de semaine à venir', 'text-orange-600');
+                    const weekInfo = 'du ' + weekStartDate.getDate() + '/' + (weekStartDate.getMonth() + 1) + 
+                                   ' au ' + weekEndDate.getDate() + '/' + (weekEndDate.getMonth() + 1);
+                    
+                    if (!confirm('Supprimer définitivement la semaine ' + (weekIndex + 1) + ' (' + weekInfo + ') ?\\n\\nToutes les activités de cette semaine seront supprimées.')) {
+                        return;
+                    }
+                    
+                    // Trouver toutes les activités de cette semaine
+                    const activitiesToDelete = schedule.filter(slot => Math.floor(slot.id / 20) === weekIndex);
+                    
+                    if (activitiesToDelete.length === 0) {
+                        showError('Aucune activité trouvée pour cette semaine');
+                        return;
+                    }
+                    
+                    // Sauvegarder les activités pour l'historique (undo)
+                    const deletedActivities = activitiesToDelete.map(activity => ({ ...activity }));
+                    
+                    // Supprimer toutes les activités de cette semaine du planning
+                    schedule = schedule.filter(slot => Math.floor(slot.id / 20) !== weekIndex);
                     
                     // Ajouter à l'historique
                     actionHistory.addAction({
                         type: 'delete_week_row',
-                        data: { weekIndex: weekIndex, admin: currentUser },
-                        undoData: null
+                        data: { 
+                            weekIndex: weekIndex, 
+                            admin: currentUser,
+                            deletedCount: deletedActivities.length
+                        },
+                        undoData: { 
+                            deletedActivities: deletedActivities
+                        }
                     });
                     
+                    // Rafraîchir l'affichage
+                    renderCalendar();
                     updateUndoRedoButtons();
                     
-                    // TODO: Implémenter la suppression réelle de semaine
-                    console.log('Supprimer semaine complète index:', weekIndex);
+                    showError('Semaine ' + (weekIndex + 1) + ' supprimée (' + deletedActivities.length + ' activités)', 'text-red-600');
+                    
                 } catch (error) {
                     console.error('Erreur:', error);
-                    showError('Erreur lors de suppression de semaine');
+                    showError('Erreur lors de la suppression de la semaine');
                 }
             }
 
@@ -1638,6 +1687,12 @@ app.get('/', (c) => {
                         schedule = schedule.filter(slot => !activitiesToRemove.includes(slot.id));
                         renderCalendar();
                         showError('Semaine supprimée (annulation)', 'text-orange-600');
+                    } else if (action.type === 'delete_week_row' && action.undoData) {
+                        // Restaurer les activités qui avaient été supprimées
+                        const activitiesToRestore = action.undoData.deletedActivities;
+                        schedule.push(...activitiesToRestore);
+                        renderCalendar();
+                        showError('Semaine restaurée (annulation suppression)', 'text-orange-600');
                     } else {
                         // Pour les autres types d'actions, juste afficher un message
                         showError('Action annulée: ' + action.type, 'text-orange-600');
@@ -1666,6 +1721,12 @@ app.get('/', (c) => {
                         schedule.push(...activitiesToRestore);
                         renderCalendar();
                         showError('Semaine restaurée (refait)', 'text-green-600');
+                    } else if (action.type === 'delete_week_row' && action.data) {
+                        // Refaire la suppression de semaine
+                        const weekIndex = action.data.weekIndex;
+                        schedule = schedule.filter(slot => Math.floor(slot.id / 20) !== weekIndex);
+                        renderCalendar();
+                        showError('Semaine supprimée (refait)', 'text-red-600');
                     } else {
                         // Pour les autres types d'actions, juste afficher un message
                         showError('Action restaurée: ' + action.type, 'text-green-600');
