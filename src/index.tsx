@@ -120,18 +120,18 @@ app.get('/api/schedule', async (c) => {
           is_urgent_when_free: day === 0 || day === 3
         });
         
-        // Légumes le mardi avec Clément par défaut
+        // Légumes le mardi avec Clement par défaut
         if (day === 1) {
           schedule.push({
             id: week * 20 + day + 10,
             date: dateStr,
             day_of_week: day + 1,
             activity_type: 'Légumes',
-            volunteer_name: 'Clément',
+            volunteer_name: 'Clement',
             status: 'assigned',
             color: '#ffc107', // Jaune pour légumes
             max_volunteers: 2,
-            notes: 'Récupération des légumes au marché',
+            notes: '',
             is_urgent_when_free: false
           });
         }
@@ -220,6 +220,29 @@ app.post('/api/schedule/:id/unassign', async (c) => {
   }
 });
 
+// Test route
+app.get('/test', (c) => {
+  return c.html(`
+    <!DOCTYPE html>
+    <html>
+    <head><title>Test Simple</title></head>
+    <body>
+      <h1>Test JavaScript Simple</h1>
+      <button onclick="alert('Test fonctionne!')">Cliquer ici</button>
+      <script>
+        console.log('JavaScript chargé avec succès');
+        function testFunction() {
+          console.log('Fonction test appelée');
+          alert('Fonction appelée avec succès!');
+        }
+        // Test de onclick dynamique
+        document.body.innerHTML += '<button onclick="testFunction()">Test Dynamic</button>';
+      </script>
+    </body>
+    </html>
+  `)
+});
+
 // Route principale - Application web
 app.get('/', (c) => {
   return c.html(`
@@ -273,23 +296,7 @@ app.get('/', (c) => {
           .today-highlight {
             background: linear-gradient(135deg, #fef3c7 0%, #fed7aa 100%) !important;
             border: 3px solid #f59e0b !important;
-            box-shadow: 0 0 15px rgba(245, 158, 11, 0.3) !important;
-            position: relative;
-          }
-          
-          .today-highlight::before {
-            content: '🌟 AUJOURD HUI';
-            position: absolute;
-            top: -8px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #f59e0b;
-            color: white;
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-size: 10px;
-            font-weight: bold;
-            z-index: 10;
+            box-shadow: 0 0 15px rgba(245, 158, 11, 0.5) !important;
           }
           
           /* Mode admin */
@@ -540,10 +547,6 @@ app.get('/', (c) => {
                         <i class="fas fa-trash mr-2"></i>
                         Nettoyer les dates passées
                     </button>
-                    <button id="addWeekBtn" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors">
-                        <i class="fas fa-plus mr-2"></i>
-                        Ajouter une semaine
-                    </button>
                 </div>
             </div>
             
@@ -561,14 +564,10 @@ app.get('/', (c) => {
                     <i class="fas fa-tools mr-2"></i>
                     Administration
                 </h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                     <button id="addActivityBtn" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors">
                         <i class="fas fa-plus-circle mr-2"></i>
                         Ajouter Activité
-                    </button>
-                    <button id="addPersonBtn" class="px-4 py-2 bg-teal-500 text-white rounded hover:bg-teal-600 transition-colors">
-                        <i class="fas fa-user-plus mr-2"></i>
-                        Ajouter Personne
                     </button>
                     <button id="undoBtn" class="px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 transition-colors" disabled>
                         <i class="fas fa-undo mr-2"></i>
@@ -619,17 +618,28 @@ app.get('/', (c) => {
                             </label>
                             <select id="activityType" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" required>
                                 <option value="">Sélectionner un type</option>
-                                <option value="Nourrissage">Nourrissage</option>
                                 <option value="Légumes">Légumes</option>
                                 <option value="Réunion">Réunion</option>
                                 <option value="Autre">Autre</option>
                             </select>
+                        </div>
+                        <div class="mb-4" id="customActivityTitle" style="display: none;">
+                            <label for="customTitle" class="block text-sm font-medium text-gray-700 mb-2">
+                                Titre de l&apos;activité
+                            </label>
+                            <input type="text" id="customTitle" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Nom de votre activité">
                         </div>
                         <div class="mb-4">
                             <label for="activityDate" class="block text-sm font-medium text-gray-700 mb-2">
                                 Date
                             </label>
                             <input type="date" id="activityDate" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" required>
+                        </div>
+                        <div class="mb-4">
+                            <label for="activityTime" class="block text-sm font-medium text-gray-700 mb-2">
+                                Horaire (optionnel)
+                            </label>
+                            <input type="time" id="activityTime" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                         </div>
                         <div class="mb-4">
                             <label for="maxVolunteers" class="block text-sm font-medium text-gray-700 mb-2">
@@ -656,6 +666,80 @@ app.get('/', (c) => {
                             <button type="submit" class="flex-1 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors">
                                 <i class="fas fa-check mr-2"></i>
                                 Ajouter
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Modal Modifier Activité -->
+            <div id="modifyActivityModal" class="modal hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+                <div class="modal-content bg-white rounded-lg p-6 mx-4 max-w-md w-full">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold">
+                            <i class="fas fa-edit mr-2"></i>
+                            Modifier l'Activité
+                        </h3>
+                        <button id="closeModifyActivityModal" class="text-gray-500 hover:text-gray-700">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <form id="modifyActivityForm">
+                        <input type="hidden" id="modifyActivityId">
+                        <div class="mb-4">
+                            <label for="modifyActivityType" class="block text-sm font-medium text-gray-700 mb-2">
+                                Type d'activité
+                            </label>
+                            <select id="modifyActivityType" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" required>
+                                <option value="">Sélectionner un type</option>
+                                <option value="Légumes">Légumes</option>
+                                <option value="Réunion">Réunion</option>
+                                <option value="Autre">Autre</option>
+                            </select>
+                        </div>
+                        <div class="mb-4" id="modifyCustomActivityTitle" style="display: none;">
+                            <label for="modifyCustomTitle" class="block text-sm font-medium text-gray-700 mb-2">
+                                Titre de l'activité
+                            </label>
+                            <input type="text" id="modifyCustomTitle" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Nom de votre activité">
+                        </div>
+                        <div class="mb-4">
+                            <label for="modifyActivityDate" class="block text-sm font-medium text-gray-700 mb-2">
+                                Date
+                            </label>
+                            <input type="date" id="modifyActivityDate" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" required>
+                        </div>
+                        <div class="mb-4">
+                            <label for="modifyActivityTime" class="block text-sm font-medium text-gray-700 mb-2">
+                                Horaire (optionnel)
+                            </label>
+                            <input type="time" id="modifyActivityTime" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                        <div class="mb-4">
+                            <label for="modifyMaxVolunteers" class="block text-sm font-medium text-gray-700 mb-2">
+                                Nombre maximum de bénévoles
+                            </label>
+                            <input type="number" id="modifyMaxVolunteers" min="1" max="10" value="1" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" required>
+                        </div>
+                        <div class="mb-4">
+                            <label for="modifyActivityNotes" class="block text-sm font-medium text-gray-700 mb-2">
+                                Notes (optionnel)
+                            </label>
+                            <textarea id="modifyActivityNotes" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Détails supplémentaires..."></textarea>
+                        </div>
+                        <div class="mb-6">
+                            <label class="flex items-center">
+                                <input type="checkbox" id="modifyIsUrgent" class="mr-2">
+                                <span class="text-sm text-gray-700">Marquer comme urgent si libre</span>
+                            </label>
+                        </div>
+                        <div class="flex gap-3">
+                            <button type="button" id="cancelModifyActivity" class="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 transition-colors">
+                                Annuler
+                            </button>
+                            <button type="submit" class="flex-1 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors">
+                                <i class="fas fa-save mr-2"></i>
+                                Sauvegarder
                             </button>
                         </div>
                     </form>
@@ -798,9 +882,18 @@ app.get('/', (c) => {
             const actionHistory = new ActionHistory();
 
             document.addEventListener('DOMContentLoaded', async () => {
-                loadUserFromStorage();
-                setupEventListeners();
-                await loadSchedule();
+                console.log('🔄 DOMContentLoaded - début');
+                try {
+                    console.log('📚 Chargement utilisateur...');
+                    loadUserFromStorage();
+                    console.log('🎯 Configuration event listeners...');
+                    setupEventListeners();
+                    console.log('📅 Chargement planning...');
+                    await loadSchedule();
+                    console.log('✅ Application chargée avec succès');
+                } catch (error) {
+                    console.error('❌ Erreur lors du chargement:', error);
+                }
             });
 
             function loadUserFromStorage() {
@@ -853,7 +946,6 @@ app.get('/', (c) => {
                 
                 // Admin panel buttons
                 document.getElementById('addActivityBtn').addEventListener('click', openAddActivityModal);
-                document.getElementById('addPersonBtn').addEventListener('click', openAddPersonModal);
                 document.getElementById('undoBtn').addEventListener('click', undoAction);
                 document.getElementById('redoBtn').addEventListener('click', redoAction);
                 document.getElementById('historyBtn').addEventListener('click', openHistoryModal);
@@ -862,6 +954,13 @@ app.get('/', (c) => {
                 document.getElementById('closeAddActivityModal').addEventListener('click', closeAddActivityModal);
                 document.getElementById('cancelAddActivity').addEventListener('click', closeAddActivityModal);
                 document.getElementById('addActivityForm').addEventListener('submit', submitAddActivity);
+                document.getElementById('activityType').addEventListener('change', handleActivityTypeChange);
+                
+                // Modal event listeners - Modify Activity
+                document.getElementById('closeModifyActivityModal').addEventListener('click', closeModifyActivityModal);
+                document.getElementById('cancelModifyActivity').addEventListener('click', closeModifyActivityModal);
+                document.getElementById('modifyActivityForm').addEventListener('submit', submitModifyActivity);
+                document.getElementById('modifyActivityType').addEventListener('change', handleModifyActivityTypeChange);
                 
                 // Modal event listeners - Add Person  
                 document.getElementById('closeAddPersonModal').addEventListener('click', closeAddPersonModal);
@@ -875,6 +974,9 @@ app.get('/', (c) => {
                 // Close modals when clicking outside
                 document.getElementById('addActivityModal').addEventListener('click', (e) => {
                     if (e.target.id === 'addActivityModal') closeAddActivityModal();
+                });
+                document.getElementById('modifyActivityModal').addEventListener('click', (e) => {
+                    if (e.target.id === 'modifyActivityModal') closeModifyActivityModal();
                 });
                 document.getElementById('addPersonModal').addEventListener('click', (e) => {
                     if (e.target.id === 'addPersonModal') closeAddPersonModal();
@@ -908,7 +1010,7 @@ app.get('/', (c) => {
 
             function toggleAdminMode() {
                 if (!currentUser) {
-                    showError('Veuillez dabord saisir votre nom');
+                    showError('Veuillez d\\'abord saisir votre nom');
                     return;
                 }
 
@@ -985,10 +1087,10 @@ app.get('/', (c) => {
                         dayDate.setDate(currentWeekStart.getDate() + dayIndex);
                         const isToday = dayDate.toISOString().split('T')[0] === today;
                         
-                        // Bouton X pour supprimer la colonne (seulement en mode admin et pas semaine courante/3 suivantes)
+                        // Bouton X pour supprimer la ligne de semaine (seulement sur première colonne et après semaine 4)
                         let deleteButton = '';
-                        if (isAdminMode && weekIndex >= 4) { // Seulement après les 4 premières semaines
-                            deleteButton = '<button onclick="deleteWeekColumn(' + weekIndex + ', ' + dayIndex + ')" class="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs hover:bg-red-600" title="Supprimer cette colonne">×</button>';
+                        if (isAdminMode && weekIndex >= 4 && dayIndex === 0) { // Seulement première colonne, après semaine 4
+                            deleteButton = '<button onclick="deleteWeekRow(' + weekIndex + ')" class="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs hover:bg-red-600" title="Supprimer cette semaine">×</button>';
                         }
                         
                         th.innerHTML = 
@@ -998,14 +1100,6 @@ app.get('/', (c) => {
                             '<div class="text-xs opacity-75">' + dayDate.toLocaleDateString('fr-FR', { month: 'short' }) + '</div>';
                         headerRow.appendChild(th);
                     });
-                    
-                    // Bouton + pour ajouter une colonne (seulement en mode admin)
-                    if (isAdminMode) {
-                        const addTh = document.createElement('th');
-                        addTh.className = 'p-3 lg:p-4 text-center font-semibold text-white border-r border-white/20';
-                        addTh.innerHTML = '<button onclick="addWeekColumn(' + weekIndex + ')" class="w-8 h-8 bg-green-500 text-white rounded-full text-lg hover:bg-green-600" title="Ajouter une semaine">+</button>';
-                        headerRow.appendChild(addTh);
-                    }
                     
                     thead.appendChild(headerRow);
                     table.appendChild(thead);
@@ -1067,6 +1161,15 @@ app.get('/', (c) => {
                     weekDiv.appendChild(tableContainer);
                     calendar.appendChild(weekDiv);
                 });
+                
+                // Bouton + en bas pour ajouter une nouvelle semaine (seulement en mode admin)
+                if (isAdminMode) {
+                    const addWeekDiv = document.createElement('div');
+                    addWeekDiv.className = 'text-center mt-6';
+                    addWeekDiv.innerHTML = '<button onclick="addNewWeek()" class="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors" title="Ajouter une nouvelle semaine">' +
+                        '<i class="fas fa-plus mr-2"></i>Ajouter une semaine</button>';
+                    calendar.appendChild(addWeekDiv);
+                }
             }
 
             function renderSlot(slot) {
@@ -1096,8 +1199,8 @@ app.get('/', (c) => {
                 
                 slotDiv.className = statusClass + ' rounded p-2 mb-2 transition-all hover:shadow-md text-xs lg:text-sm relative draggable-slot';
                 
-                // Rendre l'élément déplaçable si en mode admin
-                if (isAdminMode) {
+                // Rendre l'élément déplaçable si en mode admin (sauf nourrissages)
+                if (isAdminMode && slot.activity_type !== 'Nourrissage') {
                     slotDiv.draggable = true;
                     slotDiv.setAttribute('data-slot-id', slot.id);
                     slotDiv.style.cursor = 'grab';
@@ -1115,7 +1218,9 @@ app.get('/', (c) => {
 
                 let volunteersDisplay = '';
                 if (slot.volunteer_name) {
-                    volunteersDisplay = '👤 ' + slot.volunteer_name;
+                    // Échapper les caractères spéciaux pour éviter les problèmes JavaScript
+                    const escapedName = slot.volunteer_name.replace(/'/g, "\\'").replace(/"/g, '\\"');
+                    volunteersDisplay = '👤 ' + escapedName;
                 } else {
                     volunteersDisplay = '⭕ Libre';
                 }
@@ -1124,13 +1229,28 @@ app.get('/', (c) => {
                 if (currentUser) {
                     if (isAdminMode) {
                         // Mode admin : boutons pour assigner/désassigner n'importe qui
+                        const urgentButtonText = (slot.status === 'urgent' || slot.is_urgent_when_free) ? 'Normal' : 'Urgent';
+                        const urgentButtonClass = (slot.status === 'urgent' || slot.is_urgent_when_free) ? 'bg-gray-500 hover:bg-gray-600' : 'bg-yellow-500 hover:bg-yellow-600';
+                        
+                        // Bouton modifier pour activités non-nourrissage
+                        let modifyButton = '';
+                        if (slot.activity_type !== 'Nourrissage') {
+                            modifyButton = '<button onclick="modifyActivity(' + slot.id + ')" class="w-full px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600">Modifier</button>';
+                        }
+                        
                         if (slot.volunteer_name) {
                             actionButton = '<div class="mt-1 space-y-1">' +
                                 '<button onclick="adminUnassignSlot(' + slot.id + ')" class="w-full px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600">Retirer</button>' +
                                 '<button onclick="adminChangeSlot(' + slot.id + ')" class="w-full px-2 py-1 bg-orange-500 text-white text-xs rounded hover:bg-orange-600">Changer</button>' +
+                                '<button onclick="toggleUrgentSlot(' + slot.id + ')" class="w-full px-2 py-1 ' + urgentButtonClass + ' text-white text-xs rounded">' + urgentButtonText + '</button>' +
+                                (modifyButton ? modifyButton : '') +
                                 '</div>';
                         } else {
-                            actionButton = '<button onclick="adminAssignSlot(' + slot.id + ')" class="mt-1 px-2 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600 w-full">Assigner</button>';
+                            actionButton = '<div class="mt-1 space-y-1">' +
+                                '<button onclick="adminAssignSlot(' + slot.id + ')" class="w-full px-2 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600">Assigner</button>' +
+                                '<button onclick="toggleUrgentSlot(' + slot.id + ')" class="w-full px-2 py-1 ' + urgentButtonClass + ' text-white text-xs rounded">' + urgentButtonText + '</button>' +
+                                (modifyButton ? modifyButton : '') +
+                                '</div>';
                         }
                     } else {
                         // Mode normal : boutons pour l'utilisateur actuel
@@ -1179,12 +1299,12 @@ app.get('/', (c) => {
                     }
                 } catch (error) {
                     console.error('Erreur:', error);
-                    showError('Erreur lors de inscription');
+                    showError('Erreur lors de l\'inscription');
                 }
             }
 
             async function unassignSlot(slotId) {
-                if (!confirm('Êtes-vous sur de vouloir vous desinscrire ?')) return;
+                if (!confirm('Êtes-vous sûr de vouloir vous désinscrire ?')) return;
 
                 try {
                     const response = await axios.post('/api/schedule/' + slotId + '/unassign', {
@@ -1216,7 +1336,7 @@ app.get('/', (c) => {
                     }
                 } catch (error) {
                     console.error('Erreur:', error);
-                    showError('Erreur lors de la desinscription');
+                    showError('Erreur lors de la désinscription');
                 }
             }
 
@@ -1224,23 +1344,11 @@ app.get('/', (c) => {
 
             async function adminAssignSlot(slotId) {
                 try {
-                    const volunteers = ['Alice', 'Manu', 'Guillaume', 'Eliza', 'Sandrine', 'Laet', 'Les Furgettes'];
-                    const volunteerName = prompt('Assigner à qui ? ' + volunteers.map((v, i) => (i+1) + '. ' + v).join(', ') + '. Tapez le numero ou le nom:');
+                    const volunteerName = prompt('Assigner ce créneau à qui ?');
                     
-                    if (!volunteerName) return;
+                    if (!volunteerName || !volunteerName.trim()) return;
                     
-                    let selectedVolunteer;
-                    if (/^\d+$/.test(volunteerName.trim())) {
-                        const index = parseInt(volunteerName.trim()) - 1;
-                        selectedVolunteer = volunteers[index];
-                    } else {
-                        selectedVolunteer = volunteerName.trim();
-                    }
-                    
-                    if (!selectedVolunteer) {
-                        showError('Bénévole non valide');
-                        return;
-                    }
+                    const selectedVolunteer = volunteerName.trim();
                     
                     const response = await axios.post('/api/schedule/' + slotId + '/assign', {
                         volunteer_name: selectedVolunteer
@@ -1313,21 +1421,14 @@ app.get('/', (c) => {
                     const slot = schedule.find(s => s.id == slotId);
                     if (!slot) return;
                     
-                    const volunteers = ['Alice', 'Manu', 'Guillaume', 'Eliza', 'Sandrine', 'Laet', 'Les Furgettes'];
-                    const volunteerName = prompt('Changer ' + slot.volunteer_name + ' pour qui ? ' + volunteers.map((v, i) => (i+1) + '. ' + v).join(', ') + '. Tapez le numero ou le nom:');
+                    const volunteerName = prompt('Changer ' + slot.volunteer_name + ' pour qui ?');
                     
-                    if (!volunteerName) return;
+                    if (!volunteerName || !volunteerName.trim()) return;
                     
-                    let selectedVolunteer;
-                    if (/^\d+$/.test(volunteerName.trim())) {
-                        const index = parseInt(volunteerName.trim()) - 1;
-                        selectedVolunteer = volunteers[index];
-                    } else {
-                        selectedVolunteer = volunteerName.trim();
-                    }
+                    const selectedVolunteer = volunteerName.trim();
                     
-                    if (!selectedVolunteer || selectedVolunteer === slot.volunteer_name) {
-                        showError('Bénévole non valide ou identique');
+                    if (selectedVolunteer === slot.volunteer_name) {
+                        showError('Même bénévole sélectionné');
                         return;
                     }
                     
@@ -1361,50 +1462,90 @@ app.get('/', (c) => {
                 }
             }
 
-            // === FONCTIONS GESTION COLONNES ===
-
-            function addWeekColumn(weekIndex) {
-                if (!isAdminMode) return;
-                
+            async function toggleUrgentSlot(slotId) {
                 try {
-                    showError('Fonctionnalité d ajout de semaine à venir', 'text-blue-600');
+                    const slot = schedule.find(s => s.id == slotId);
+                    if (!slot) return;
+                    
+                    const wasUrgent = slot.status === 'urgent' || slot.is_urgent_when_free;
+                    const newUrgentState = !wasUrgent;
+                    
+                    // Mettre à jour le statut
+                    if (newUrgentState) {
+                        slot.is_urgent_when_free = true;
+                        if (!slot.volunteer_name) {
+                            slot.status = 'urgent';
+                        }
+                    } else {
+                        slot.is_urgent_when_free = false;
+                        if (slot.status === 'urgent' && !slot.volunteer_name) {
+                            slot.status = 'available';
+                        }
+                    }
                     
                     // Ajouter à l'historique
                     actionHistory.addAction({
-                        type: 'add_week_column',
+                        type: 'toggle_urgent',
+                        data: { slotId: slotId, newState: newUrgentState, admin: currentUser },
+                        undoData: { slotId: slotId, oldState: wasUrgent }
+                    });
+                    
+                    updateUndoRedoButtons();
+                    renderCalendar();
+                    
+                    const statusText = newUrgentState ? 'marqué comme urgent' : 'retiré de urgent';
+                    showError('Créneau ' + statusText, 'text-blue-600');
+                    
+                } catch (error) {
+                    console.error('Erreur:', error);
+                    showError('Erreur lors du changement urgent');
+                }
+            }
+
+            // === FONCTIONS GESTION SEMAINES ===
+
+            function addNewWeek() {
+                if (!isAdminMode) return;
+                
+                try {
+                    showError('Fonctionnalité d ajout de nouvelle semaine à venir', 'text-green-600');
+                    
+                    // Ajouter à l'historique
+                    actionHistory.addAction({
+                        type: 'add_new_week',
+                        data: { admin: currentUser },
+                        undoData: null
+                    });
+                    
+                    updateUndoRedoButtons();
+                    
+                    // TODO: Implémenter l'ajout réel de nouvelle semaine
+                    console.log('Ajouter nouvelle semaine à la fin');
+                } catch (error) {
+                    console.error('Erreur:', error);
+                    showError('Erreur lors de l\\'ajout de nouvelle semaine');
+                }
+            }
+
+            function deleteWeekRow(weekIndex) {
+                if (!isAdminMode || weekIndex < 4) return; // Protection semaines courantes
+                
+                try {
+                    if (!confirm('Supprimer cette semaine complète du planning ?')) return;
+                    
+                    showError('Fonctionnalité de suppression de semaine à venir', 'text-orange-600');
+                    
+                    // Ajouter à l'historique
+                    actionHistory.addAction({
+                        type: 'delete_week_row',
                         data: { weekIndex: weekIndex, admin: currentUser },
                         undoData: null
                     });
                     
                     updateUndoRedoButtons();
                     
-                    // TODO: Implémenter l'ajout réel de semaine
-                    console.log('Ajouter semaine après index:', weekIndex);
-                } catch (error) {
-                    console.error('Erreur:', error);
-                    showError('Erreur lors de ajout de semaine');
-                }
-            }
-
-            function deleteWeekColumn(weekIndex, dayIndex) {
-                if (!isAdminMode || weekIndex < 4) return; // Protection semaines courantes
-                
-                try {
-                    if (!confirm('Supprimer cette semaine du planning ?')) return;
-                    
-                    showError('Fonctionnalité de suppression de semaine à venir', 'text-orange-600');
-                    
-                    // Ajouter à l'historique
-                    actionHistory.addAction({
-                        type: 'delete_week_column',
-                        data: { weekIndex: weekIndex, dayIndex: dayIndex, admin: currentUser },
-                        undoData: null
-                    });
-                    
-                    updateUndoRedoButtons();
-                    
                     // TODO: Implémenter la suppression réelle de semaine
-                    console.log('Supprimer semaine index:', weekIndex, 'jour:', dayIndex);
+                    console.log('Supprimer semaine complète index:', weekIndex);
                 } catch (error) {
                     console.error('Erreur:', error);
                     showError('Erreur lors de suppression de semaine');
@@ -1504,6 +1645,9 @@ app.get('/', (c) => {
                 const today = new Date().toISOString().split('T')[0];
                 document.getElementById('activityDate').value = today;
                 
+                // Masquer le champ titre personnalisé par défaut
+                document.getElementById('customActivityTitle').style.display = 'none';
+                
                 document.getElementById('addActivityModal').classList.remove('hidden');
             }
 
@@ -1521,13 +1665,37 @@ app.get('/', (c) => {
                 document.getElementById('addPersonModal').classList.add('hidden');
             }
 
+            function handleActivityTypeChange() {
+                const activityType = document.getElementById('activityType').value;
+                const customTitleDiv = document.getElementById('customActivityTitle');
+                
+                if (activityType === 'Autre') {
+                    customTitleDiv.style.display = 'block';
+                    document.getElementById('customTitle').required = true;
+                } else {
+                    customTitleDiv.style.display = 'none';
+                    document.getElementById('customTitle').required = false;
+                    document.getElementById('customTitle').value = '';
+                }
+            }
+
             async function submitAddActivity(e) {
                 e.preventDefault();
                 
                 try {
+                    let activityType = document.getElementById('activityType').value;
+                    const customTitle = document.getElementById('customTitle').value.trim();
+                    const activityTime = document.getElementById('activityTime').value;
+                    
+                    // Si c'est "Autre", utiliser le titre personnalisé
+                    if (activityType === 'Autre' && customTitle) {
+                        activityType = customTitle;
+                    }
+                    
                     const formData = {
-                        type: document.getElementById('activityType').value,
+                        type: activityType,
                         date: document.getElementById('activityDate').value,
+                        time: activityTime,
                         maxVolunteers: parseInt(document.getElementById('maxVolunteers').value),
                         notes: document.getElementById('activityNotes').value.trim(),
                         isUrgent: document.getElementById('isUrgent').checked
@@ -1536,6 +1704,11 @@ app.get('/', (c) => {
                     // Validation
                     if (!formData.type || !formData.date) {
                         showError('Veuillez remplir tous les champs obligatoires');
+                        return;
+                    }
+                    
+                    if (document.getElementById('activityType').value === 'Autre' && !customTitle) {
+                        showError('Veuillez saisir un titre pour votre activité');
                         return;
                     }
 
@@ -1611,6 +1784,161 @@ app.get('/', (c) => {
                 } catch (error) {
                     console.error('Erreur:', error);
                     showError('Erreur lors de ajout du bénévole');
+                }
+            }
+
+            // === FONCTIONS DE MODIFICATION D'ACTIVITÉ ===
+
+            function modifyActivity(slotId) {
+                const slot = schedule.find(s => s.id === slotId);
+                if (!slot) {
+                    showError('Activité non trouvée');
+                    return;
+                }
+
+                // Ne permettre la modification que pour les activités non-nourrissage
+                if (slot.activity_type === 'Nourrissage') {
+                    showError('Les nourrissages ne peuvent pas être modifiés');
+                    return;
+                }
+
+                // Pré-remplir le formulaire avec les données actuelles
+                document.getElementById('modifyActivityId').value = slotId;
+                
+                // Gérer le type d'activité
+                const activityTypeSelect = document.getElementById('modifyActivityType');
+                const customTitleDiv = document.getElementById('modifyCustomActivityTitle');
+                const customTitleInput = document.getElementById('modifyCustomTitle');
+                
+                // Vérifier si c'est un type prédéfini ou personnalisé
+                const predefinedTypes = ['Légumes', 'Réunion'];
+                if (predefinedTypes.includes(slot.activity_type)) {
+                    activityTypeSelect.value = slot.activity_type;
+                    customTitleDiv.style.display = 'none';
+                    customTitleInput.required = false;
+                    customTitleInput.value = '';
+                } else {
+                    // Type personnalisé
+                    activityTypeSelect.value = 'Autre';
+                    customTitleDiv.style.display = 'block';
+                    customTitleInput.required = true;
+                    customTitleInput.value = slot.activity_type;
+                }
+
+                document.getElementById('modifyActivityDate').value = slot.date;
+                document.getElementById('modifyActivityTime').value = slot.time || '';
+                document.getElementById('modifyMaxVolunteers').value = slot.max_volunteers || 1;
+                document.getElementById('modifyActivityNotes').value = slot.notes || '';
+                document.getElementById('modifyIsUrgent').checked = slot.is_urgent_when_free || false;
+
+                // Ouvrir le modal
+                document.getElementById('modifyActivityModal').classList.remove('hidden');
+            }
+
+            function closeModifyActivityModal() {
+                document.getElementById('modifyActivityModal').classList.add('hidden');
+            }
+
+            function handleModifyActivityTypeChange() {
+                const activityType = document.getElementById('modifyActivityType').value;
+                const customTitleDiv = document.getElementById('modifyCustomActivityTitle');
+                const customTitleInput = document.getElementById('modifyCustomTitle');
+                
+                if (activityType === 'Autre') {
+                    customTitleDiv.style.display = 'block';
+                    customTitleInput.required = true;
+                } else {
+                    customTitleDiv.style.display = 'none';
+                    customTitleInput.required = false;
+                    customTitleInput.value = '';
+                }
+            }
+
+            async function submitModifyActivity(e) {
+                e.preventDefault();
+                
+                try {
+                    const slotId = parseInt(document.getElementById('modifyActivityId').value);
+                    let activityType = document.getElementById('modifyActivityType').value;
+                    const customTitle = document.getElementById('modifyCustomTitle').value.trim();
+                    const activityTime = document.getElementById('modifyActivityTime').value;
+                    
+                    // Si c'est "Autre", utiliser le titre personnalisé
+                    if (activityType === 'Autre' && customTitle) {
+                        activityType = customTitle;
+                    }
+                    
+                    const formData = {
+                        type: activityType,
+                        date: document.getElementById('modifyActivityDate').value,
+                        time: activityTime,
+                        maxVolunteers: parseInt(document.getElementById('modifyMaxVolunteers').value),
+                        notes: document.getElementById('modifyActivityNotes').value.trim(),
+                        isUrgent: document.getElementById('modifyIsUrgent').checked
+                    };
+
+                    // Validation
+                    if (!formData.type || !formData.date) {
+                        showError('Veuillez remplir tous les champs obligatoires');
+                        return;
+                    }
+                    
+                    if (document.getElementById('modifyActivityType').value === 'Autre' && !customTitle) {
+                        showError('Veuillez saisir un titre pour votre activité');
+                        return;
+                    }
+
+                    // Trouver l'activité à modifier
+                    const slotIndex = schedule.findIndex(s => s.id === slotId);
+                    if (slotIndex === -1) {
+                        showError('Activité non trouvée');
+                        return;
+                    }
+
+                    // Sauvegarder l'ancien état pour l'historique
+                    const oldSlot = { ...schedule[slotIndex] };
+
+                    // Mettre à jour l'activité
+                    schedule[slotIndex] = {
+                        ...schedule[slotIndex],
+                        activity_type: formData.type,
+                        date: formData.date,
+                        time: formData.time,
+                        max_volunteers: formData.maxVolunteers,
+                        notes: formData.notes,
+                        is_urgent_when_free: formData.isUrgent
+                    };
+
+                    // En production, faire l'appel API
+                    // await axios.put('/api/schedule/' + slotId, formData);
+
+                    // Ajouter à l'historique
+                    actionHistory.addAction({
+                        type: 'modify_activity',
+                        data: { 
+                            slotId: slotId,
+                            newData: schedule[slotIndex],
+                            user: currentUser 
+                        },
+                        undoData: { 
+                            slotId: slotId,
+                            oldData: oldSlot 
+                        }
+                    });
+
+                    // Reconstruire le calendrier avec les nouvelles données
+                    buildCalendar();
+                    
+                    updateUndoRedoButtons();
+                    closeModifyActivityModal();
+                    showError('Activité "' + formData.type + '" modifiée avec succès', 'text-green-600');
+                    
+                    // Recharger le planning (en production)
+                    // await loadSchedule();
+                    
+                } catch (error) {
+                    console.error('Erreur:', error);
+                    showError('Erreur lors de la modification de l\'activité');
                 }
             }
 

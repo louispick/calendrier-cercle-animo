@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test JavaScript</title>
+</head>
+<body>
+    <h1>Test JavaScript</h1>
+    <script>
+        console.log("Starting test...");
+        
+        // Test 1: Nom avec accent
+        const testName1 = "Clément";
+        console.log("Test name 1:", testName1);
+        
+        // Test 2: Génération onclick comme dans notre app
+        const slotId = 123;
+        const button1 = '<button onclick="modifyActivity(' + slotId + ')">Modifier</button>';
+        console.log("Button HTML:", button1);
+        
+        // Test 3: Test avec nom échappé
+        const escapedName = testName1.replace(/'/g, "\\'").replace(/"/g, '\\"');
+        console.log("Escaped name:", escapedName);
+        
+        console.log("All tests completed successfully!");
+    </script>
+</body>
+</html>
