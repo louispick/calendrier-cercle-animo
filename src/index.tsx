@@ -74,43 +74,81 @@ app.get('/api/activity-types', async (c) => {
 // API - Récupérer le planning (prochaines 4 semaines)
 app.get('/api/schedule', async (c) => {
   try {
-    // Générer un planning d'exemple pour les prochaines 4 semaines (commence lundi)
     const today = new Date();
     const schedule = [];
     
     // Trouver le prochain lundi
     const nextMonday = new Date(today);
     const dayOfWeek = today.getDay();
-    const daysUntilMonday = dayOfWeek === 0 ? 1 : 8 - dayOfWeek; // Si dimanche (0), alors 1 jour, sinon 8-dayOfWeek
+    const daysUntilMonday = dayOfWeek === 0 ? 1 : 8 - dayOfWeek;
     nextMonday.setDate(today.getDate() + daysUntilMonday);
     
+    // Générateur de données de test amélioré
     for (let week = 0; week < 4; week++) {
-      for (let day = 0; day < 7; day++) { // 0=Lundi, 1=Mardi, ..., 6=Dimanche
+      for (let day = 0; day < 7; day++) {
         const date = new Date(nextMonday);
         date.setDate(nextMonday.getDate() + (week * 7) + day);
         const dateStr = date.toISOString().split('T')[0];
         
-        // Nourrissage quotidien
+        // Nourrissage quotidien avec gestion avancée des statuts
+        const nourrissageId = week * 20 + day + 1;
+        let nourrissageStatus, nourrissageVolunteer = null;
+        
+        // Logique de test pour les statuts
+        if (day === 0 || day === 3) { // Lundi et Jeudi urgents
+          nourrissageStatus = 'urgent';
+        } else if (day === 1) { // Mardi assigné
+          nourrissageStatus = 'assigned';
+          nourrissageVolunteer = 'Alice';
+        } else if (day === 5 && week < 2) { // Samedi assigné sur 2 premières semaines
+          nourrissageStatus = 'assigned';
+          nourrissageVolunteer = 'Les Furgettes';
+        } else {
+          nourrissageStatus = 'available';
+        }
+        
         schedule.push({
-          id: week * 14 + day + 1,
+          id: nourrissageId,
           date: dateStr,
-          day_of_week: day + 1, // 1=Lundi, 2=Mardi, ..., 7=Dimanche
+          day_of_week: day + 1,
           activity_type: 'Nourrissage',
-          volunteer_name: day === 1 ? 'Alice' : (day === 5 ? 'Les Furgettes' : null), // Mardi et Samedi assignés
-          status: day === 0 ? 'searching' : (day === 1 || day === 5 ? 'assigned' : 'available'),
-          color: '#e3f2fd'
+          volunteer_name: nourrissageVolunteer,
+          status: nourrissageStatus,
+          color: '#dc3545', // Rouge pour urgent par défaut
+          max_volunteers: 1,
+          notes: '',
+          is_urgent_when_free: day === 0 || day === 3
         });
         
-        // Légumes le mardi (day === 1)
+        // Légumes le mardi avec Clément par défaut
         if (day === 1) {
           schedule.push({
-            id: week * 14 + day + 8,
+            id: week * 20 + day + 10,
             date: dateStr,
             day_of_week: day + 1,
             activity_type: 'Légumes',
-            volunteer_name: 'Alice',
+            volunteer_name: 'Clément',
             status: 'assigned',
-            color: '#f3e5f5'
+            color: '#ffc107', // Jaune pour légumes
+            max_volunteers: 2,
+            notes: 'Récupération des légumes au marché',
+            is_urgent_when_free: false
+          });
+        }
+        
+        // Quelques réunions d'exemple
+        if (day === 4 && week === 1) { // Vendredi semaine 2
+          schedule.push({
+            id: week * 20 + day + 15,
+            date: dateStr,
+            day_of_week: day + 1,
+            activity_type: 'Réunion',
+            volunteer_name: null,
+            status: 'available',
+            color: '#6f42c1', // Violet pour réunions
+            max_volunteers: 5,
+            notes: 'Réunion mensuelle du Cercle Animô',
+            is_urgent_when_free: false
           });
         }
       }
@@ -187,19 +225,53 @@ app.get('/', (c) => {
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
         <style>
-          .status-available { background-color: #f8f9fa; border: 2px solid #28a745; }
-          .status-assigned { background-color: #e7f3ff; border: 2px solid #007bff; }
-          .status-searching { background-color: #fff3cd; border: 2px solid #ffc107; }
-          .status-cancelled { background-color: #f8d7da; border: 2px solid #dc3545; }
-          
-          .day-header { 
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+          /* Couleurs améliorées pour le nourrissage - moins flashy, plus lisibles */
+          .status-urgent { 
+            background-color: #2563eb; 
+            color: white; 
+            border: 2px solid #1d4ed8; 
+            font-weight: 600;
+            position: relative;
+          }
+          .status-assigned { 
+            background-color: #1e40af; 
+            color: white; 
+            border: 2px solid #1e3a8a;
+          }
+          .status-available { 
+            background-color: #16a34a; 
+            color: white; 
+            border: 2px solid #15803d;
           }
           
-          .activity-nourrissage { background-color: #e3f2fd; }
-          .activity-legumes { background-color: #f3e5f5; }
-          .activity-reunion { background-color: #fff3e0; }
+          /* Badge urgent (point d'exclamation) */
+          .urgent-badge {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            width: 24px;
+            height: 24px;
+            background-color: #fbbf24;
+            color: #92400e;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            border: 2px solid #f59e0b;
+          }
+          
+          /* Mise en surbrillance du jour actuel */
+          .today-highlight {
+            background-color: #fef3c7 !important;
+            border: 2px solid #f59e0b !important;
+          }
+          
+          .day-header { 
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+          }
           
           .week-table { 
             min-width: 800px;
@@ -232,23 +304,24 @@ app.get('/', (c) => {
                     Calendrier de nourrissage des animaux et activités de la ferme
                 </p>
                 
-                <!-- Légende des statuts -->
-                <div class="flex flex-wrap justify-center gap-2 lg:gap-4 text-sm">
-                    <div class="flex items-center gap-2">
-                        <div class="w-4 h-4 bg-yellow-200 border-2 border-yellow-500"></div>
-                        <span>🟡 On cherche quelqu'un !</span>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <div class="w-4 h-4 bg-gray-100 border-2 border-green-500"></div>
-                        <span>⚪ Disponible</span>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <div class="w-4 h-4 bg-blue-100 border-2 border-blue-500"></div>
-                        <span>🔵 Créneau pris</span>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <div class="w-4 h-4 bg-purple-100 border-2 border-purple-500"></div>
-                        <span>🟣 Légumes</span>
+                <div class="text-center mb-6">
+                    <div class="flex flex-wrap justify-center gap-2 lg:gap-4 text-sm">
+                        <div class="flex items-center gap-2">
+                            <div class="w-4 h-4 bg-green-600 border-2 border-green-700"></div>
+                            <span>🟢 Libre</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <div class="w-4 h-4 bg-blue-600 border-2 border-blue-700"></div>
+                            <span>🔵 Pris</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <div class="w-6 h-6 bg-yellow-400 border border-yellow-500 rounded-full flex items-center justify-center text-xs text-yellow-800 font-bold">!</div>
+                            <span>Créneau à prendre en priorité</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <div class="w-4 h-4" style="background-color: #ffc107;"></div>
+                            <span>🟡 Légumes</span>
+                        </div>
                     </div>
                 </div>
             </header>
@@ -399,8 +472,8 @@ app.get('/', (c) => {
                 const calendar = document.getElementById('calendar');
                 calendar.innerHTML = '';
 
-                // Grouper par semaines (commençant le lundi)
                 const weekGroups = groupByWeeks(schedule);
+                const today = new Date().toISOString().split('T')[0];
 
                 weekGroups.forEach((week, weekIndex) => {
                     const weekDiv = document.createElement('div');
@@ -430,12 +503,12 @@ app.get('/', (c) => {
                         
                         const dayDate = new Date(currentWeekStart);
                         dayDate.setDate(currentWeekStart.getDate() + dayIndex);
+                        const isToday = dayDate.toISOString().split('T')[0] === today;
                         
-                        th.innerHTML = \`
-                            <div class="text-sm font-medium">\${dayName}</div>
-                            <div class="text-lg lg:text-xl font-bold">\${dayDate.getDate()}</div>
-                            <div class="text-xs opacity-75">\${dayDate.toLocaleDateString('fr-FR', { month: 'short' })}</div>
-                        \`;
+                        th.innerHTML = 
+                            '<div class="text-sm font-medium">' + dayName + '</div>' +
+                            '<div class="text-lg lg:text-xl font-bold ' + (isToday ? 'text-yellow-300' : '') + '">' + dayDate.getDate() + '</div>' +
+                            '<div class="text-xs opacity-75">' + dayDate.toLocaleDateString('fr-FR', { month: 'short' }) + '</div>';
                         headerRow.appendChild(th);
                     });
                     
@@ -456,7 +529,14 @@ app.get('/', (c) => {
                             const cell = document.createElement('td');
                             cell.className = 'p-2 lg:p-3 border-r border-gray-200 last:border-r-0 align-top';
                             
-                            // Trouver les activités pour ce jour et ce type
+                            const dayDate = new Date(currentWeekStart);
+                            dayDate.setDate(currentWeekStart.getDate() + dayIndex);
+                            const isToday = dayDate.toISOString().split('T')[0] === today;
+                            
+                            if (isToday) {
+                                cell.classList.add('today-highlight');
+                            }
+                            
                             const dayActivities = week.filter(slot => 
                                 slot.day_of_week === (dayIndex + 1) && 
                                 slot.activity_type === activityType
@@ -480,28 +560,60 @@ app.get('/', (c) => {
                 });
             }
 
-            // Générer un créneau
             function renderSlot(slot) {
                 const slotDiv = document.createElement('div');
-                slotDiv.className = \`status-\${slot.status} rounded p-2 mb-2 cursor-pointer transition-all hover:shadow-md text-xs lg:text-sm\`;
                 
+                let statusClass = '';
+                let showUrgentBadge = false;
+                
+                if (slot.activity_type.toLowerCase().includes('nourrissage')) {
+                    // Pour le nourrissage : bleu si pris, vert si libre
+                    // Les créneaux urgents sont TOUJOURS verts + pictogramme (même si pris)
+                    if (slot.volunteer_name) {
+                        // Créneau pris : bleu normal, mais peut avoir le badge urgent
+                        statusClass = 'status-assigned'; // Bleu
+                        showUrgentBadge = slot.is_urgent_when_free; // Montrer le badge si urgent même quand pris
+                    } else {
+                        // Créneau libre : vert, avec ou sans badge selon urgence
+                        statusClass = 'status-available'; // Toujours vert pour les créneaux libres
+                        showUrgentBadge = slot.status === 'urgent' || slot.is_urgent_when_free;
+                    }
+                } else {
+                    statusClass = 'status-' + slot.status;
+                    slotDiv.style.backgroundColor = slot.color;
+                    slotDiv.style.border = '2px solid ' + slot.color;
+                    slotDiv.style.borderRadius = '0.375rem';
+                }
+                
+                slotDiv.className = statusClass + ' rounded p-2 mb-2 transition-all hover:shadow-md text-xs lg:text-sm relative';
+
+                let volunteersDisplay = '';
+                if (slot.volunteer_name) {
+                    volunteersDisplay = '👤 ' + slot.volunteer_name;
+                } else {
+                    volunteersDisplay = '⭕ Libre';
+                }
+
                 let actionButton = '';
                 if (currentUser) {
-                    if (slot.status === 'available' || slot.status === 'searching') {
+                    if (slot.status === 'available' || slot.status === 'urgent' || !slot.volunteer_name) {
                         actionButton = '<button onclick="assignSlot(' + slot.id + ')" class="mt-1 px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 w-full">Inscription</button>';
                     } else if (slot.volunteer_name === currentUser) {
                         actionButton = '<button onclick="unassignSlot(' + slot.id + ')" class="mt-1 px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 w-full">Desinscription</button>';
                     }
                 }
 
-                slotDiv.innerHTML = \`
-                    <div class="font-medium text-xs lg:text-sm mb-1">\${slot.activity_type}</div>
-                    <div class="text-xs text-gray-600 mb-1">
-                        \${slot.volunteer_name ? '👤 ' + slot.volunteer_name : '⭕ Libre'}
-                    </div>
-                    \${slot.notes ? \`<div class="text-xs text-gray-500 italic mb-1">\${slot.notes}</div>\` : ''}
-                    \${actionButton}
-                \`;
+                // Pictogramme urgent
+                let urgentBadge = '';
+                if (showUrgentBadge) {
+                    urgentBadge = '<div class="urgent-badge"><i class="fas fa-exclamation"></i></div>';
+                }
+
+                slotDiv.innerHTML = urgentBadge +
+                                   '<div class="font-medium text-xs lg:text-sm mb-1">' + slot.activity_type + '</div>' +
+                                   '<div class="text-xs mb-1">' + volunteersDisplay + '</div>' +
+                                   (slot.notes ? '<div class="text-xs italic mb-1 opacity-90">' + slot.notes + '</div>' : '') +
+                                   actionButton;
 
                 return slotDiv;
             }
