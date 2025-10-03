@@ -361,6 +361,87 @@ app.get('/', (c) => {
             background-color: #ffebee !important;
             border: 2px dashed #f44336 !important;
           }
+          
+          /* Support tactile avancé */
+          .touch-dragging {
+            animation: touchDragPulse 0.5s ease-in-out infinite alternate;
+            border: 3px solid #2196f3;
+            box-shadow: 0 0 20px rgba(33, 150, 243, 0.5);
+          }
+          
+          @keyframes touchDragPulse {
+            from {
+              transform: scale(1.1) rotate(5deg);
+              box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+            }
+            to {
+              transform: scale(1.15) rotate(5deg);
+              box-shadow: 0 12px 35px rgba(0,0,0,0.4);
+            }
+          }
+          
+          /* Améliorations tactiles */
+          @media (hover: none) and (pointer: coarse) {
+            .draggable-slot {
+              padding: 0.75rem !important;
+              min-height: 80px;
+              touch-action: none;
+            }
+            
+            .draggable-slot:active {
+              transform: scale(0.95);
+              background-color: rgba(33, 150, 243, 0.1) !important;
+            }
+            
+            .drop-zone {
+              min-height: 100px;
+              border-width: 3px !important;
+            }
+            
+            .drop-zone.drag-over {
+              animation: dropZonePulse 0.3s ease-in-out infinite alternate;
+            }
+          }
+          
+          @keyframes dropZonePulse {
+            from { border-color: #0288d1; }
+            to { border-color: #81d4fa; }
+          }
+          
+          /* Accessibilité clavier */
+          .draggable-slot:focus {
+            outline: 3px solid #4caf50;
+            outline-offset: 2px;
+          }
+          
+          .keyboard-drag-mode .draggable-slot::after {
+            content: "Appuyez sur Entrée pour sélectionner, flèches pour déplacer";
+            position: absolute;
+            bottom: -20px;
+            left: 0;
+            right: 0;
+            background: #333;
+            color: white;
+            font-size: 10px;
+            padding: 2px 4px;
+            border-radius: 3px;
+            z-index: 1000;
+          }
+          
+          .keyboard-selected {
+            outline: 3px solid #4caf50 !important;
+            outline-offset: 3px;
+            animation: keyboardSelectedPulse 1s ease-in-out infinite alternate;
+          }
+          
+          @keyframes keyboardSelectedPulse {
+            from { 
+              box-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
+            }
+            to { 
+              box-shadow: 0 0 20px rgba(76, 175, 80, 0.8);
+            }
+          }
         </style>
     </head>
     <body class="bg-gray-100 min-h-screen">
@@ -976,9 +1057,15 @@ app.get('/', (c) => {
                     slotDiv.setAttribute('data-slot-id', slot.id);
                     slotDiv.style.cursor = 'grab';
                     
-                    // Ajouter les event listeners pour le drag
+                    // Ajouter les event listeners pour le drag (souris)
                     slotDiv.addEventListener('dragstart', handleDragStart);
                     slotDiv.addEventListener('dragend', handleDragEnd);
+                    
+                    // Ajouter le support tactile
+                    addTouchSupport(slotDiv, slot.id);
+                    
+                    // Ajouter le support clavier pour l'accessibilité
+                    addKeyboardSupport(slotDiv, slot.id);
                 }
 
                 let volunteersDisplay = '';
@@ -1395,40 +1482,10 @@ app.get('/', (c) => {
                     return;
                 }
                 
-                // Sauvegarder l'état actuel pour undo
-                const oldState = {
-                    id: draggedSlot.id,
-                    date: draggedSlot.date,
-                    day_of_week: draggedSlot.day_of_week,
-                    activity_type: draggedSlot.activity_type
-                };
+                // Utiliser la fonction commune
+                performActivityMove(draggedSlot, targetDate, targetActivityType);
                 
-                // Calculer le nouveau day_of_week basé sur la date cible
-                const targetDateObj = new Date(targetDate);
-                const newDayOfWeek = (targetDateObj.getDay() + 6) % 7 + 1; // Conversion dimanche=0 vers lundi=1
-                
-                // Mettre à jour l'activité
-                draggedSlot.date = targetDate;
-                draggedSlot.day_of_week = newDayOfWeek;
-                draggedSlot.activity_type = targetActivityType;
-                
-                // Ajouter à l'historique
-                actionHistory.addAction({
-                    type: 'move_activity',
-                    data: {
-                        slotId: draggedSlot.id,
-                        newDate: targetDate,
-                        newActivityType: targetActivityType,
-                        user: currentUser
-                    },
-                    undoData: oldState
-                });
-                
-                updateUndoRedoButtons();
-                renderCalendar();
-                
-                showError('Activité déplacée avec succès vers le ' + targetDate, 'text-green-600');
-                console.log('Activity moved successfully');
+                console.log('Activity moved successfully via mouse');
                 
                 // En production, on ferait ici un appel API
                 // await axios.put('/api/schedule/' + draggedSlot.id + '/move', {...});
@@ -1437,6 +1494,362 @@ app.get('/', (c) => {
             function canDropActivity(slot, targetDate, targetActivityType) {
                 // Règle : on ne peut déplacer une activité que vers une cellule du même type
                 return slot.activity_type === targetActivityType;
+            }
+
+            // === SUPPORT TACTILE AVANCÉ ===
+            
+            let touchStartData = null;
+            let touchMoveActive = false;
+            let touchClone = null;
+            let currentTouchDropZone = null;
+
+            function addTouchSupport(element, slotId) {
+                if (!isAdminMode) return;
+                
+                element.addEventListener('touchstart', handleTouchStart, { passive: false });
+                element.addEventListener('touchmove', handleTouchMove, { passive: false });
+                element.addEventListener('touchend', handleTouchEnd, { passive: false });
+            }
+
+            function handleTouchStart(e) {
+                if (!isAdminMode) return;
+                
+                e.preventDefault();
+                const touch = e.touches[0];
+                const element = e.currentTarget;
+                const slotId = element.getAttribute('data-slot-id');
+                
+                touchStartData = {
+                    element: element,
+                    slot: schedule.find(s => s.id == slotId),
+                    startX: touch.clientX,
+                    startY: touch.clientY,
+                    startTime: Date.now()
+                };
+                
+                // Vibration légère sur les appareils compatibles
+                if (navigator.vibrate) {
+                    navigator.vibrate(50);
+                }
+                
+                // Ajouter un délai pour distinguer touch vs scroll
+                setTimeout(() => {
+                    if (touchStartData && !touchMoveActive) {
+                        startTouchDrag(touchStartData);
+                    }
+                }, 150);
+            }
+
+            function startTouchDrag(data) {
+                touchMoveActive = true;
+                draggedSlot = data.slot;
+                draggedElement = data.element;
+                
+                // Créer un clone visuel pour le drag
+                touchClone = data.element.cloneNode(true);
+                touchClone.style.position = 'fixed';
+                touchClone.style.zIndex = '9999';
+                touchClone.style.pointerEvents = 'none';
+                touchClone.style.opacity = '0.8';
+                touchClone.style.transform = 'scale(1.1) rotate(5deg)';
+                touchClone.style.boxShadow = '0 8px 25px rgba(0,0,0,0.3)';
+                touchClone.classList.add('touch-dragging');
+                
+                document.body.appendChild(touchClone);
+                
+                // Style original
+                data.element.classList.add('dragging');
+                
+                console.log('Touch drag started for:', data.slot.activity_type);
+            }
+
+            function handleTouchMove(e) {
+                if (!touchMoveActive || !touchClone) return;
+                
+                e.preventDefault();
+                const touch = e.touches[0];
+                
+                // Déplacer le clone
+                touchClone.style.left = (touch.clientX - 50) + 'px';
+                touchClone.style.top = (touch.clientY - 50) + 'px';
+                
+                // Trouver l'élément sous le doigt
+                const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
+                const dropZone = elementBelow ? elementBelow.closest('.drop-zone') : null;
+                
+                // Nettoyer les anciens highlights
+                if (currentTouchDropZone && currentTouchDropZone !== dropZone) {
+                    currentTouchDropZone.classList.remove('drag-over', 'drop-valid', 'drop-invalid');
+                }
+                
+                // Appliquer le highlight à la nouvelle zone
+                if (dropZone && dropZone !== currentTouchDropZone) {
+                    const targetDate = dropZone.getAttribute('data-date');
+                    const targetActivityType = dropZone.getAttribute('data-activity-type');
+                    const isValid = canDropActivity(draggedSlot, targetDate, targetActivityType);
+                    
+                    dropZone.classList.add('drag-over');
+                    if (isValid) {
+                        dropZone.classList.add('drop-valid');
+                        // Vibration de confirmation
+                        if (navigator.vibrate) {
+                            navigator.vibrate(30);
+                        }
+                    } else {
+                        dropZone.classList.add('drop-invalid');
+                        // Vibration d'erreur
+                        if (navigator.vibrate) {
+                            navigator.vibrate([50, 50, 50]);
+                        }
+                    }
+                }
+                
+                currentTouchDropZone = dropZone;
+            }
+
+            function handleTouchEnd(e) {
+                if (!touchStartData) return;
+                
+                // Si le drag était actif, traiter le drop
+                if (touchMoveActive && currentTouchDropZone) {
+                    const targetDate = currentTouchDropZone.getAttribute('data-date');
+                    const targetActivityType = currentTouchDropZone.getAttribute('data-activity-type');
+                    
+                    if (canDropActivity(draggedSlot, targetDate, targetActivityType)) {
+                        // Exécuter le drop
+                        performActivityMove(draggedSlot, targetDate, targetActivityType);
+                        
+                        // Vibration de succès
+                        if (navigator.vibrate) {
+                            navigator.vibrate([100, 50, 100]);
+                        }
+                    } else {
+                        showError('Déplacement impossible: types d\'activités différents');
+                        
+                        // Vibration d'erreur
+                        if (navigator.vibrate) {
+                            navigator.vibrate([200, 100, 200]);
+                        }
+                    }
+                }
+                
+                // Nettoyer l'état tactile
+                cleanupTouchDrag();
+            }
+
+            function cleanupTouchDrag() {
+                touchStartData = null;
+                touchMoveActive = false;
+                
+                // Supprimer le clone
+                if (touchClone) {
+                    document.body.removeChild(touchClone);
+                    touchClone = null;
+                }
+                
+                // Nettoyer les styles
+                if (draggedElement) {
+                    draggedElement.classList.remove('dragging');
+                }
+                
+                // Nettoyer les drop zones
+                if (currentTouchDropZone) {
+                    currentTouchDropZone.classList.remove('drag-over', 'drop-valid', 'drop-invalid');
+                    currentTouchDropZone = null;
+                }
+                
+                document.querySelectorAll('.drop-zone').forEach(zone => {
+                    zone.classList.remove('drag-over', 'drop-valid', 'drop-invalid');
+                });
+                
+                draggedSlot = null;
+                draggedElement = null;
+            }
+
+            // Fonction commune pour exécuter le déplacement
+            function performActivityMove(slot, targetDate, targetActivityType) {
+                // Sauvegarder l'état pour undo
+                const oldState = {
+                    id: slot.id,
+                    date: slot.date,
+                    day_of_week: slot.day_of_week,
+                    activity_type: slot.activity_type
+                };
+                
+                // Calculer le nouveau day_of_week
+                const targetDateObj = new Date(targetDate);
+                const newDayOfWeek = (targetDateObj.getDay() + 6) % 7 + 1;
+                
+                // Mettre à jour l'activité
+                slot.date = targetDate;
+                slot.day_of_week = newDayOfWeek;
+                slot.activity_type = targetActivityType;
+                
+                // Ajouter à l'historique
+                actionHistory.addAction({
+                    type: 'move_activity',
+                    data: {
+                        slotId: slot.id,
+                        newDate: targetDate,
+                        newActivityType: targetActivityType,
+                        user: currentUser,
+                        method: touchMoveActive ? 'touch' : 'mouse'
+                    },
+                    undoData: oldState
+                });
+                
+                updateUndoRedoButtons();
+                renderCalendar();
+                
+                showError('Activité déplacée avec succès vers le ' + targetDate, 'text-green-600');
+            }
+
+            // === SUPPORT CLAVIER POUR ACCESSIBILITÉ ===
+            
+            let selectedSlotForKeyboard = null;
+            let keyboardDragMode = false;
+
+            function addKeyboardSupport(element, slotId) {
+                if (!isAdminMode) return;
+                
+                element.tabIndex = 0; // Rendre l'élément focusable
+                element.setAttribute('role', 'button');
+                element.setAttribute('aria-label', 'Activité déplaçable. Appuyez sur Entrée pour sélectionner.');
+                
+                element.addEventListener('keydown', handleKeyboardDrag);
+                element.addEventListener('focus', handleSlotFocus);
+                element.addEventListener('blur', handleSlotBlur);
+            }
+
+            function handleSlotFocus(e) {
+                const element = e.currentTarget;
+                if (selectedSlotForKeyboard === element) {
+                    element.setAttribute('aria-label', 'Activité sélectionnée. Utilisez les flèches pour déplacer, Échap pour annuler.');
+                } else {
+                    element.setAttribute('aria-label', 'Activité déplaçable. Appuyez sur Entrée pour sélectionner.');
+                }
+            }
+
+            function handleSlotBlur(e) {
+                // Ne pas désélectionner automatiquement pour permettre la navigation au clavier
+            }
+
+            function handleKeyboardDrag(e) {
+                const element = e.currentTarget;
+                const slotId = element.getAttribute('data-slot-id');
+                const slot = schedule.find(s => s.id == slotId);
+                
+                if (!slot) return;
+                
+                switch(e.key) {
+                    case 'Enter':
+                    case ' ':
+                        e.preventDefault();
+                        if (selectedSlotForKeyboard === element) {
+                            // Désélectionner
+                            cancelKeyboardSelection();
+                        } else {
+                            // Sélectionner
+                            selectSlotForKeyboard(element, slot);
+                        }
+                        break;
+                        
+                    case 'Escape':
+                        e.preventDefault();
+                        cancelKeyboardSelection();
+                        break;
+                        
+                    case 'ArrowUp':
+                    case 'ArrowDown':
+                    case 'ArrowLeft':
+                    case 'ArrowRight':
+                        if (selectedSlotForKeyboard === element) {
+                            e.preventDefault();
+                            moveSlotWithKeyboard(e.key, slot);
+                        }
+                        break;
+                }
+            }
+
+            function selectSlotForKeyboard(element, slot) {
+                // Désélectionner l'ancien si existe
+                cancelKeyboardSelection();
+                
+                selectedSlotForKeyboard = element;
+                draggedSlot = slot;
+                keyboardDragMode = true;
+                
+                element.classList.add('keyboard-selected');
+                element.setAttribute('aria-pressed', 'true');
+                document.body.classList.add('keyboard-drag-mode');
+                
+                // Vibration si supportée
+                if (navigator.vibrate) {
+                    navigator.vibrate(50);
+                }
+                
+                showError('Activité sélectionnée. Utilisez les flèches pour déplacer.', 'text-blue-600');
+            }
+
+            function cancelKeyboardSelection() {
+                if (selectedSlotForKeyboard) {
+                    selectedSlotForKeyboard.classList.remove('keyboard-selected');
+                    selectedSlotForKeyboard.setAttribute('aria-pressed', 'false');
+                    selectedSlotForKeyboard = null;
+                }
+                
+                draggedSlot = null;
+                keyboardDragMode = false;
+                document.body.classList.remove('keyboard-drag-mode');
+                
+                // Nettoyer toutes les zones de drop
+                document.querySelectorAll('.drop-zone').forEach(zone => {
+                    zone.classList.remove('drag-over', 'drop-valid', 'drop-invalid');
+                });
+            }
+
+            function moveSlotWithKeyboard(direction, slot) {
+                const currentDate = new Date(slot.date);
+                let newDate = new Date(currentDate);
+                
+                switch(direction) {
+                    case 'ArrowLeft':
+                        newDate.setDate(currentDate.getDate() - 1);
+                        break;
+                    case 'ArrowRight':
+                        newDate.setDate(currentDate.getDate() + 1);
+                        break;
+                    case 'ArrowUp':
+                        newDate.setDate(currentDate.getDate() - 7);
+                        break;
+                    case 'ArrowDown':
+                        newDate.setDate(currentDate.getDate() + 7);
+                        break;
+                }
+                
+                const targetDateStr = newDate.toISOString().split('T')[0];
+                
+                // Vérifier si la nouvelle date est valide (dans le planning)
+                const targetSlot = schedule.find(s => 
+                    s.date === targetDateStr && 
+                    s.activity_type === slot.activity_type
+                );
+                
+                if (targetSlot && canDropActivity(slot, targetDateStr, slot.activity_type)) {
+                    performActivityMove(slot, targetDateStr, slot.activity_type);
+                    cancelKeyboardSelection();
+                    
+                    // Vibration de succès
+                    if (navigator.vibrate) {
+                        navigator.vibrate([50, 50, 50]);
+                    }
+                } else {
+                    // Vibration d'erreur
+                    if (navigator.vibrate) {
+                        navigator.vibrate([100, 50, 100]);
+                    }
+                    showError('Déplacement impossible dans cette direction', 'text-red-600');
+                }
             }
 
             // Utilitaires
