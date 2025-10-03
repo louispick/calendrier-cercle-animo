@@ -1089,7 +1089,7 @@ app.get('/', (c) => {
                         // Bouton X pour supprimer la ligne de semaine (seulement sur première colonne et après semaine 4)
                         let deleteButton = '';
                         if (isAdminMode && weekIndex >= 4 && dayIndex === 0) { // Seulement première colonne, après semaine 4
-                            deleteButton = '<button onclick="deleteWeekRow(' + weekIndex + ')" class="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs hover:bg-red-600" title="Supprimer cette semaine">×</button>';
+                            deleteButton = '<button onclick="deleteWeekRow(' + weekIndex + ')" class="absolute top-1 left-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs hover:bg-red-600" title="Supprimer cette semaine">×</button>';
                         }
                         
                         th.innerHTML = 
