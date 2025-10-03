@@ -1009,7 +1009,7 @@ app.get('/', (c) => {
 
             function toggleAdminMode() {
                 if (!currentUser) {
-                    showError('Veuillez d\\'abord saisir votre nom');
+                    showError("Veuillez d'abord saisir votre nom");
                     return;
                 }
 
@@ -1298,7 +1298,7 @@ app.get('/', (c) => {
                     }
                 } catch (error) {
                     console.error('Erreur:', error);
-                    showError('Erreur lors de l\'inscription');
+                    showError("Erreur lors de l'inscription");
                 }
             }
 
@@ -1335,7 +1335,7 @@ app.get('/', (c) => {
                     }
                 } catch (error) {
                     console.error('Erreur:', error);
-                    showError('Erreur lors de la désinscription');
+                    showError("Erreur lors de la désinscription");
                 }
             }
 
@@ -1522,7 +1522,7 @@ app.get('/', (c) => {
                     console.log('Ajouter nouvelle semaine à la fin');
                 } catch (error) {
                     console.error('Erreur:', error);
-                    showError('Erreur lors de l\\'ajout de nouvelle semaine');
+                    showError("Erreur lors de l'ajout de nouvelle semaine");
                 }
             }
 
@@ -1937,7 +1937,7 @@ app.get('/', (c) => {
                     
                 } catch (error) {
                     console.error('Erreur:', error);
-                    showError('Erreur lors de la modification de l\'activité');
+                    showError("Erreur lors de la modification de l'activité");
                 }
             }
 
