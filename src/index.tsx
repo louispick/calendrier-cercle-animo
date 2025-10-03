@@ -1252,10 +1252,12 @@ app.get('/', (c) => {
                         const urgentButtonText = (slot.status === 'urgent' || slot.is_urgent_when_free) ? 'Normal' : 'Urgent';
                         const urgentButtonClass = (slot.status === 'urgent' || slot.is_urgent_when_free) ? 'bg-gray-500 hover:bg-gray-600' : 'bg-yellow-500 hover:bg-yellow-600';
                         
-                        // Bouton modifier pour activités non-nourrissage
+                        // Boutons pour activités non-nourrissage
                         let modifyButton = '';
+                        let deleteButton = '';
                         if (slot.activity_type !== 'Nourrissage') {
                             modifyButton = '<button onclick="modifyActivity(' + slot.id + ')" class="w-full px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600">Modifier</button>';
+                            deleteButton = '<button onclick="deleteActivity(' + slot.id + ')" class="w-full px-2 py-1 bg-red-800 text-white text-xs rounded hover:bg-red-900" title="Supprimer définitivement cette activité">🗑️ Supprimer</button>';
                         }
                         
                         if (slot.volunteer_name) {
@@ -1264,12 +1266,14 @@ app.get('/', (c) => {
                                 '<button onclick="adminChangeSlot(' + slot.id + ')" class="w-full px-2 py-1 bg-orange-500 text-white text-xs rounded hover:bg-orange-600">Changer</button>' +
                                 '<button onclick="toggleUrgentSlot(' + slot.id + ')" class="w-full px-2 py-1 ' + urgentButtonClass + ' text-white text-xs rounded">' + urgentButtonText + '</button>' +
                                 (modifyButton ? modifyButton : '') +
+                                (deleteButton ? deleteButton : '') +
                                 '</div>';
                         } else {
                             actionButton = '<div class="mt-1 space-y-1">' +
                                 '<button onclick="adminAssignSlot(' + slot.id + ')" class="w-full px-2 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600">Assigner</button>' +
                                 '<button onclick="toggleUrgentSlot(' + slot.id + ')" class="w-full px-2 py-1 ' + urgentButtonClass + ' text-white text-xs rounded">' + urgentButtonText + '</button>' +
                                 (modifyButton ? modifyButton : '') +
+                                (deleteButton ? deleteButton : '') +
                                 '</div>';
                         }
                     } else {
@@ -1778,6 +1782,19 @@ app.get('/', (c) => {
                             renderCalendar();
                             showError('Modifications annulées', 'text-orange-600');
                         }
+                    } else if (action.type === 'delete_activity' && action.undoData) {
+                        // Restaurer l'activité qui avait été supprimée
+                        const deletedActivity = action.undoData.deletedActivity;
+                        const originalIndex = action.undoData.originalIndex;
+                        
+                        // Réinsérer à sa position originale ou à la fin si l'index n'est plus valide
+                        if (originalIndex >= 0 && originalIndex <= schedule.length) {
+                            schedule.splice(originalIndex, 0, deletedActivity);
+                        } else {
+                            schedule.push(deletedActivity);
+                        }
+                        renderCalendar();
+                        showError('Activité restaurée (annulation suppression)', 'text-orange-600');
                     } else {
                         // Pour les autres types d'actions, juste afficher un message
                         showError('Action annulée: ' + action.type, 'text-orange-600');
@@ -1828,6 +1845,12 @@ app.get('/', (c) => {
                             renderCalendar();
                             showError('Modifications restaurées (refait)', 'text-green-600');
                         }
+                    } else if (action.type === 'delete_activity' && action.data) {
+                        // Refaire la suppression d'activité
+                        const activityId = action.data.activityId;
+                        schedule = schedule.filter(activity => activity.id !== activityId);
+                        renderCalendar();
+                        showError('Activité supprimée (refait)', 'text-red-600');
                     } else {
                         // Pour les autres types d'actions, juste afficher un message
                         showError('Action restaurée: ' + action.type, 'text-green-600');
@@ -2212,6 +2235,68 @@ app.get('/', (c) => {
                 } catch (error) {
                     console.error('Erreur:', error);
                     showError("Erreur lors de la modification de l'activité");
+                }
+            }
+
+            function deleteActivity(slotId) {
+                if (!isAdminMode) {
+                    showError('Seuls les administrateurs peuvent supprimer des activités');
+                    return;
+                }
+                
+                try {
+                    // Trouver l'activité à supprimer
+                    const slotIndex = schedule.findIndex(s => s.id === slotId);
+                    if (slotIndex === -1) {
+                        showError('Activité non trouvée');
+                        return;
+                    }
+                    
+                    const activityToDelete = schedule[slotIndex];
+                    
+                    // Interdire la suppression des nourrissages
+                    if (activityToDelete.activity_type === 'Nourrissage') {
+                        showError('Les activités de nourrissage ne peuvent pas être supprimées');
+                        return;
+                    }
+                    
+                    // Demander confirmation
+                    const activityInfo = activityToDelete.activity_type + 
+                        (activityToDelete.time ? ' à ' + activityToDelete.time : '') + 
+                        ' le ' + activityToDelete.date;
+                    
+                    if (!confirm('Supprimer définitivement l\'activité "' + activityInfo + '" ?\\n\\nCette action ne peut pas être annulée via l\'historique.')) {
+                        return;
+                    }
+                    
+                    // Sauvegarder l'activité pour l'historique
+                    const deletedActivity = { ...activityToDelete };
+                    
+                    // Supprimer l'activité du planning
+                    schedule.splice(slotIndex, 1);
+                    
+                    // Ajouter à l'historique
+                    actionHistory.addAction({
+                        type: 'delete_activity',
+                        data: { 
+                            activityId: slotId,
+                            admin: currentUser 
+                        },
+                        undoData: { 
+                            deletedActivity: deletedActivity,
+                            originalIndex: slotIndex
+                        }
+                    });
+                    
+                    // Rafraîchir l'affichage
+                    renderCalendar();
+                    updateUndoRedoButtons();
+                    
+                    showError('Activité "' + activityToDelete.activity_type + '" supprimée définitivement', 'text-red-600');
+                    
+                } catch (error) {
+                    console.error('Erreur:', error);
+                    showError('Erreur lors de la suppression de l\'activité');
                 }
             }
 
