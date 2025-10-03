@@ -325,6 +325,42 @@ app.get('/', (c) => {
               opacity: 0;
             }
           }
+          
+          /* Drag and Drop */
+          .draggable-slot {
+            transition: all 0.2s ease;
+          }
+          
+          .draggable-slot:hover {
+            transform: scale(1.02);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+          }
+          
+          .draggable-slot.dragging {
+            opacity: 0.5;
+            transform: rotate(5deg);
+            cursor: grabbing !important;
+            z-index: 1000;
+          }
+          
+          .drop-zone {
+            transition: background-color 0.2s ease;
+          }
+          
+          .drop-zone.drag-over {
+            background-color: #e0f2fe !important;
+            border: 2px dashed #0288d1 !important;
+          }
+          
+          .drop-zone.drop-valid {
+            background-color: #e8f5e8 !important;
+            border: 2px dashed #4caf50 !important;
+          }
+          
+          .drop-zone.drop-invalid {
+            background-color: #ffebee !important;
+            border: 2px dashed #f44336 !important;
+          }
         </style>
     </head>
     <body class="bg-gray-100 min-h-screen">
@@ -870,6 +906,20 @@ app.get('/', (c) => {
                                 cell.classList.add('today-highlight');
                             }
                             
+                            // Rendre la cellule capable d'accepter les drops si en mode admin
+                            if (isAdminMode) {
+                                cell.setAttribute('data-day-index', dayIndex);
+                                cell.setAttribute('data-activity-type', activityType);
+                                cell.setAttribute('data-date', dayDate.toISOString().split('T')[0]);
+                                cell.classList.add('drop-zone');
+                                
+                                // Event listeners pour le drop
+                                cell.addEventListener('dragover', handleDragOver);
+                                cell.addEventListener('drop', handleDrop);
+                                cell.addEventListener('dragenter', handleDragEnter);
+                                cell.addEventListener('dragleave', handleDragLeave);
+                            }
+                            
                             const dayActivities = week.filter(slot => 
                                 slot.day_of_week === (dayIndex + 1) && 
                                 slot.activity_type === activityType
@@ -918,7 +968,18 @@ app.get('/', (c) => {
                     slotDiv.style.borderRadius = '0.375rem';
                 }
                 
-                slotDiv.className = statusClass + ' rounded p-2 mb-2 transition-all hover:shadow-md text-xs lg:text-sm relative';
+                slotDiv.className = statusClass + ' rounded p-2 mb-2 transition-all hover:shadow-md text-xs lg:text-sm relative draggable-slot';
+                
+                // Rendre l'élément déplaçable si en mode admin
+                if (isAdminMode) {
+                    slotDiv.draggable = true;
+                    slotDiv.setAttribute('data-slot-id', slot.id);
+                    slotDiv.style.cursor = 'grab';
+                    
+                    // Ajouter les event listeners pour le drag
+                    slotDiv.addEventListener('dragstart', handleDragStart);
+                    slotDiv.addEventListener('dragend', handleDragEnd);
+                }
 
                 let volunteersDisplay = '';
                 if (slot.volunteer_name) {
@@ -1222,6 +1283,160 @@ app.get('/', (c) => {
                     'Autre': '#20c997'
                 };
                 return colorMap[type] || '#6c757d';
+            }
+
+            // === FONCTIONS DRAG-AND-DROP ===
+            
+            let draggedSlot = null;
+            let draggedElement = null;
+
+            function handleDragStart(e) {
+                if (!isAdminMode) return;
+                
+                draggedElement = e.target;
+                draggedSlot = schedule.find(s => s.id == e.target.getAttribute('data-slot-id'));
+                
+                if (!draggedSlot) return;
+                
+                // Ajouter classe de drag
+                draggedElement.classList.add('dragging');
+                
+                // Configurer les données de transfert
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/html', draggedElement.outerHTML);
+                
+                // Créer image de drag personnalisée
+                const dragImage = draggedElement.cloneNode(true);
+                dragImage.style.transform = 'rotate(5deg)';
+                dragImage.style.opacity = '0.8';
+                document.body.appendChild(dragImage);
+                e.dataTransfer.setDragImage(dragImage, 0, 0);
+                
+                // Nettoyer l'image après un délai
+                setTimeout(() => {
+                    if (document.body.contains(dragImage)) {
+                        document.body.removeChild(dragImage);
+                    }
+                }, 1);
+                
+                console.log('Drag started for activity:', draggedSlot.activity_type);
+            }
+
+            function handleDragEnd(e) {
+                if (!isAdminMode) return;
+                
+                // Nettoyer les classes et états
+                if (draggedElement) {
+                    draggedElement.classList.remove('dragging');
+                }
+                
+                // Nettoyer toutes les zones de drop
+                document.querySelectorAll('.drop-zone').forEach(zone => {
+                    zone.classList.remove('drag-over', 'drop-valid', 'drop-invalid');
+                });
+                
+                draggedSlot = null;
+                draggedElement = null;
+            }
+
+            function handleDragOver(e) {
+                if (!isAdminMode || !draggedSlot) return;
+                
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+            }
+
+            function handleDragEnter(e) {
+                if (!isAdminMode || !draggedSlot) return;
+                
+                e.preventDefault();
+                const dropZone = e.currentTarget;
+                
+                // Vérifier si le drop est valide
+                const targetDate = dropZone.getAttribute('data-date');
+                const targetActivityType = dropZone.getAttribute('data-activity-type');
+                
+                const isValidDrop = canDropActivity(draggedSlot, targetDate, targetActivityType);
+                
+                // Appliquer les styles appropriés
+                dropZone.classList.add('drag-over');
+                if (isValidDrop) {
+                    dropZone.classList.add('drop-valid');
+                    dropZone.classList.remove('drop-invalid');
+                } else {
+                    dropZone.classList.add('drop-invalid');
+                    dropZone.classList.remove('drop-valid');
+                }
+            }
+
+            function handleDragLeave(e) {
+                if (!isAdminMode) return;
+                
+                const dropZone = e.currentTarget;
+                
+                // Vérifier si on quitte vraiment la zone (pas un enfant)
+                if (!dropZone.contains(e.relatedTarget)) {
+                    dropZone.classList.remove('drag-over', 'drop-valid', 'drop-invalid');
+                }
+            }
+
+            function handleDrop(e) {
+                if (!isAdminMode || !draggedSlot) return;
+                
+                e.preventDefault();
+                const dropZone = e.currentTarget;
+                
+                const targetDate = dropZone.getAttribute('data-date');
+                const targetActivityType = dropZone.getAttribute('data-activity-type');
+                
+                // Vérifier si le drop est valide
+                if (!canDropActivity(draggedSlot, targetDate, targetActivityType)) {
+                    showError('Déplacement impossible: les activités de types différents ne peuvent pas être mélangées');
+                    return;
+                }
+                
+                // Sauvegarder l'état actuel pour undo
+                const oldState = {
+                    id: draggedSlot.id,
+                    date: draggedSlot.date,
+                    day_of_week: draggedSlot.day_of_week,
+                    activity_type: draggedSlot.activity_type
+                };
+                
+                // Calculer le nouveau day_of_week basé sur la date cible
+                const targetDateObj = new Date(targetDate);
+                const newDayOfWeek = (targetDateObj.getDay() + 6) % 7 + 1; // Conversion dimanche=0 vers lundi=1
+                
+                // Mettre à jour l'activité
+                draggedSlot.date = targetDate;
+                draggedSlot.day_of_week = newDayOfWeek;
+                draggedSlot.activity_type = targetActivityType;
+                
+                // Ajouter à l'historique
+                actionHistory.addAction({
+                    type: 'move_activity',
+                    data: {
+                        slotId: draggedSlot.id,
+                        newDate: targetDate,
+                        newActivityType: targetActivityType,
+                        user: currentUser
+                    },
+                    undoData: oldState
+                });
+                
+                updateUndoRedoButtons();
+                renderCalendar();
+                
+                showError('Activité déplacée avec succès vers le ' + targetDate, 'text-green-600');
+                console.log('Activity moved successfully');
+                
+                // En production, on ferait ici un appel API
+                // await axios.put('/api/schedule/' + draggedSlot.id + '/move', {...});
+            }
+
+            function canDropActivity(slot, targetDate, targetActivityType) {
+                // Règle : on ne peut déplacer une activité que vers une cellule du même type
+                return slot.activity_type === targetActivityType;
             }
 
             // Utilitaires
