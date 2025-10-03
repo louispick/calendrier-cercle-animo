@@ -53,7 +53,7 @@ app.post('/api/volunteers', async (c) => {
 
     return c.json({ success: true, volunteer: newVolunteer });
   } catch (error) {
-    return c.json({ error: 'Erreur lors de l\'ajout du bénévole' }, 500);
+    return c.json({ error: 'Erreur lors de ajout du bénévole' }, 500);
   }
 });
 
@@ -147,7 +147,7 @@ app.get('/api/schedule', async (c) => {
             status: 'available',
             color: '#6f42c1', // Violet pour réunions
             max_volunteers: 5,
-            notes: 'Réunion mensuelle du Cercle Animô',
+            notes: 'Réunion mensuelle du Cercle Animo',
             is_urgent_when_free: false
           });
         }
@@ -183,7 +183,7 @@ app.post('/api/schedule/:id/assign', async (c) => {
       return c.json({ error: 'Créneau non trouvé' }, 404);
     }
   } catch (error) {
-    return c.json({ error: 'Erreur lors de l\'inscription' }, 500);
+    return c.json({ error: 'Erreur lors de inscription' }, 500);
   }
 });
 
@@ -806,11 +806,14 @@ app.get('/', (c) => {
 
             async function loadSchedule() {
                 try {
+                    console.log('Chargement des données...');
                     const response = await axios.get('/api/schedule');
                     schedule = response.data;
+                    console.log('Données reçues:', schedule.length, 'éléments');
                     renderCalendar();
+                    console.log('Calendrier rendu avec succès');
                 } catch (error) {
-                    console.error('Erreur:', error);
+                    console.error('Erreur lors du chargement:', error);
                     document.getElementById('loading').innerHTML = 
                         '<p class="text-red-600">❌ Erreur lors du chargement des données</p>';
                 }
@@ -913,12 +916,15 @@ app.get('/', (c) => {
 
 
             function renderCalendar() {
+                console.log('renderCalendar appelé, currentUser:', currentUser);
+                
                 if (!currentUser) {
                     document.getElementById('calendar').innerHTML = 
                         '<p class="text-center text-gray-500 py-8">Veuillez saisir votre nom pour voir le planning</p>';
                     return;
                 }
 
+                console.log('Rendu du calendrier pour:', currentUser);
                 const calendar = document.getElementById('calendar');
                 calendar.innerHTML = '';
 
@@ -1090,10 +1096,13 @@ app.get('/', (c) => {
                     urgentBadge = '<div class="urgent-badge"><i class="fas fa-exclamation"></i></div>';
                 }
 
+                // Échapper les caractères spéciaux dans les notes
+                const safeNotes = slot.notes ? slot.notes.replace(/"/g, '&quot;').replace(/'/g, '&#39;') : '';
+                
                 slotDiv.innerHTML = urgentBadge +
                                    '<div class="font-medium text-xs lg:text-sm mb-1">' + slot.activity_type + '</div>' +
                                    '<div class="text-xs mb-1">' + volunteersDisplay + '</div>' +
-                                   (slot.notes ? '<div class="text-xs italic mb-1 opacity-90">' + slot.notes + '</div>' : '') +
+                                   (safeNotes ? '<div class="text-xs italic mb-1 opacity-90">' + safeNotes + '</div>' : '') +
                                    actionButton;
 
                 return slotDiv;
@@ -1316,7 +1325,7 @@ app.get('/', (c) => {
                     
                 } catch (error) {
                     console.error('Erreur:', error);
-                    showError('Erreur lors de l\'ajout de l\'activité');
+                    showError('Erreur lors de ajout de activité');
                 }
             }
 
@@ -1358,7 +1367,7 @@ app.get('/', (c) => {
                     
                 } catch (error) {
                     console.error('Erreur:', error);
-                    showError('Erreur lors de l\'ajout du bénévole');
+                    showError('Erreur lors de ajout du bénévole');
                 }
             }
 
@@ -1624,7 +1633,7 @@ app.get('/', (c) => {
                             navigator.vibrate([100, 50, 100]);
                         }
                     } else {
-                        showError('Déplacement impossible: types d\'activités différents');
+                        showError('Déplacement impossible: types activités différents');
                         
                         // Vibration d'erreur
                         if (navigator.vibrate) {
