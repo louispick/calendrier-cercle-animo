@@ -1040,7 +1040,21 @@ app.get('/', (c) => {
 
 
 
+            // Variable pour debounce
+            let renderTimeout = null;
+            
             function renderCalendar() {
+                // Debounce pour éviter les rendus multiples rapides
+                if (renderTimeout) {
+                    clearTimeout(renderTimeout);
+                }
+                
+                renderTimeout = setTimeout(() => {
+                    renderCalendarInternal();
+                }, 10);
+            }
+            
+            function renderCalendarInternal() {
                 console.log('renderCalendar appelé, currentUser:', currentUser);
                 
                 if (!currentUser) {
@@ -1231,11 +1245,9 @@ app.get('/', (c) => {
                     slotDiv.addEventListener('dragstart', handleDragStart);
                     slotDiv.addEventListener('dragend', handleDragEnd);
                     
-                    // Ajouter le support tactile
-                    addTouchSupport(slotDiv, slot.id);
-                    
-                    // Ajouter le support clavier pour l'accessibilité
-                    addKeyboardSupport(slotDiv, slot.id);
+                    // TODO: Ajouter le support tactile et clavier
+                    // addTouchSupport(slotDiv, slot.id);
+                    // addKeyboardSupport(slotDiv, slot.id);
                 }
 
                 let volunteersDisplay = '';
@@ -1293,8 +1305,15 @@ app.get('/', (c) => {
                 // Échapper les caractères spéciaux dans les notes
                 const safeNotes = slot.notes ? slot.notes.replace(/"/g, '&quot;').replace(/'/g, '&#39;') : '';
                 
+                // Formatage de l'heure si elle existe
+                let timeDisplay = '';
+                if (slot.time) {
+                    timeDisplay = '<div class="text-xs mb-1 font-medium opacity-80">🕐 ' + slot.time + '</div>';
+                }
+                
                 slotDiv.innerHTML = urgentBadge +
                                    '<div class="font-medium text-xs lg:text-sm mb-1">' + slot.activity_type + '</div>' +
+                                   timeDisplay +
                                    '<div class="text-xs mb-1">' + volunteersDisplay + '</div>' +
                                    (safeNotes ? '<div class="text-xs italic mb-1 opacity-90">' + safeNotes + '</div>' : '') +
                                    actionButton;
@@ -1943,9 +1962,13 @@ app.get('/', (c) => {
                     const activityDate = new Date(formData.date);
                     const dayOfWeek = activityDate.getDay() === 0 ? 7 : activityDate.getDay(); // Dimanche = 7, Lundi = 1
                     
+                    // Générer un ID unique pour éviter les collisions
+                    const maxExistingId = schedule.length > 0 ? Math.max(...schedule.map(s => s.id)) : 0;
+                    const newId = Math.max(Date.now(), maxExistingId + 1);
+                    
                     // Créer la nouvelle activité
                     const newActivity = {
-                        id: Date.now(),
+                        id: newId,
                         date: formData.date,
                         day_of_week: dayOfWeek,
                         activity_type: formData.type,
