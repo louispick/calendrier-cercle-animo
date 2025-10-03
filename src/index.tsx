@@ -1165,8 +1165,31 @@ app.get('/', (c) => {
                 if (isAdminMode) {
                     const addWeekDiv = document.createElement('div');
                     addWeekDiv.className = 'text-center mt-6';
-                    addWeekDiv.innerHTML = '<button onclick="addNewWeek()" class="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors" title="Ajouter une nouvelle semaine">' +
-                        '<i class="fas fa-plus mr-2"></i>Ajouter une semaine</button>';
+                    
+                    // Calculer les semaines manquantes restaurables
+                    const existingWeekIndexes = [...new Set(schedule.map(slot => Math.floor(slot.id / 20)))];
+                    const maxWeek = existingWeekIndexes.length > 0 ? Math.max(...existingWeekIndexes) : -1;
+                    const missingWeeks = [];
+                    for (let i = 4; i <= maxWeek; i++) {
+                        if (!existingWeekIndexes.includes(i)) {
+                            missingWeeks.push(i + 1);  // +1 pour affichage utilisateur
+                        }
+                    }
+                    
+                    let buttonText = '<i class="fas fa-plus mr-2"></i>Ajouter une semaine';
+                    let titleText = 'Ajouter une nouvelle semaine';
+                    let extraInfo = '';
+                    
+                    if (missingWeeks.length > 0) {
+                        buttonText = '<i class="fas fa-plus mr-2"></i>Restaurer semaine ' + missingWeeks[0];
+                        titleText = 'Restaurer la semaine supprimée ' + missingWeeks[0];
+                        if (missingWeeks.length > 1) {
+                            extraInfo = '<div class="text-sm text-gray-600 mt-2">Semaines restaurables : ' + missingWeeks.join(', ') + '</div>';
+                        }
+                    }
+                    
+                    addWeekDiv.innerHTML = '<button onclick="addNewWeek()" class="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors" title="' + titleText + '">' +
+                        buttonText + '</button>' + extraInfo;
                     calendar.appendChild(addWeekDiv);
                 }
             }
@@ -1507,9 +1530,23 @@ app.get('/', (c) => {
                 if (!isAdminMode) return;
                 
                 try {
-                    // Calculer le nombre de semaines actuelles
-                    const existingWeeks = Math.max(...schedule.map(slot => Math.floor(slot.id / 20))) + 1;
-                    const newWeekIndex = existingWeeks;
+                    // Calculer les semaines existantes et détecter les "trous"
+                    const existingWeekIndexes = [...new Set(schedule.map(slot => Math.floor(slot.id / 20)))];
+                    const maxWeek = existingWeekIndexes.length > 0 ? Math.max(...existingWeekIndexes) : -1;
+                    
+                    // Chercher le premier "trou" dans la séquence de semaines
+                    let newWeekIndex = null;
+                    for (let i = 4; i <= maxWeek; i++) { // Commencer après les 4 semaines protégées
+                        if (!existingWeekIndexes.includes(i)) {
+                            newWeekIndex = i;
+                            break;
+                        }
+                    }
+                    
+                    // Si aucun trou trouvé, ajouter à la fin
+                    if (newWeekIndex === null) {
+                        newWeekIndex = maxWeek + 1;
+                    }
                     
                     console.log('Ajout nouvelle semaine, index:', newWeekIndex);
                     
@@ -1594,7 +1631,12 @@ app.get('/', (c) => {
                     updateUndoRedoButtons();
                     
                     const vegetablesCopied = newActivities.filter(a => a.activity_type === 'Légumes').length;
-                    let message = 'Nouvelle semaine ' + (newWeekIndex + 1) + ' ajoutée (vierge) avec ' + newActivities.length + ' activités';
+                    const isRestoringGap = newWeekIndex <= maxWeek; // Si on ajoute dans un trou
+                    
+                    let message = isRestoringGap 
+                        ? 'Semaine ' + (newWeekIndex + 1) + ' restaurée (vierge) avec ' + newActivities.length + ' activités'
+                        : 'Nouvelle semaine ' + (newWeekIndex + 1) + ' ajoutée (vierge) avec ' + newActivities.length + ' activités';
+                        
                     if (vegetablesCopied > 0) {
                         message += ' - ' + vegetablesCopied + ' créneaux légumes copiés de la semaine précédente';
                     }
