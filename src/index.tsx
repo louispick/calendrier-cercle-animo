@@ -1040,21 +1040,7 @@ app.get('/', (c) => {
 
 
 
-            // Variable pour debounce
-            let renderTimeout = null;
-            
             function renderCalendar() {
-                // Debounce pour éviter les rendus multiples rapides
-                if (renderTimeout) {
-                    clearTimeout(renderTimeout);
-                }
-                
-                renderTimeout = setTimeout(() => {
-                    renderCalendarInternal();
-                }, 1);
-            }
-            
-            function renderCalendarInternal() {
                 console.log('renderCalendar appelé, currentUser:', currentUser);
                 
                 if (!currentUser) {
@@ -1206,6 +1192,11 @@ app.get('/', (c) => {
                         buttonText + '</button>' + extraInfo;
                     calendar.appendChild(addWeekDiv);
                 }
+                
+                // Initialiser la délégation d'événements pour optimiser les performances
+                if (isAdminMode) {
+                    initEventDelegation();
+                }
             }
 
             function renderSlot(slot) {
@@ -1240,14 +1231,9 @@ app.get('/', (c) => {
                     slotDiv.draggable = true;
                     slotDiv.setAttribute('data-slot-id', slot.id);
                     slotDiv.style.cursor = 'grab';
+                    slotDiv.classList.add('admin-draggable'); // Marquer pour délégation d'événements
                     
-                    // Ajouter les event listeners pour le drag (souris)
-                    slotDiv.addEventListener('dragstart', handleDragStart);
-                    slotDiv.addEventListener('dragend', handleDragEnd);
-                    
-                    // TODO: Ajouter le support tactile et clavier
-                    // addTouchSupport(slotDiv, slot.id);
-                    // addKeyboardSupport(slotDiv, slot.id);
+                    // Les event listeners sont maintenant gérés par délégation dans initEventDelegation()
                 }
 
                 let volunteersDisplay = '';
@@ -1319,6 +1305,28 @@ app.get('/', (c) => {
                                    actionButton;
 
                 return slotDiv;
+            }
+
+            // Initialisation de la délégation d'événements pour optimiser les performances
+            function initEventDelegation() {
+                const calendar = document.getElementById('calendar');
+                
+                // Supprimer les anciens listeners s'ils existent
+                if (calendar.dragListenerAdded) return;
+                
+                calendar.addEventListener('dragstart', function(e) {
+                    if (e.target.classList.contains('admin-draggable')) {
+                        handleDragStart(e);
+                    }
+                });
+                
+                calendar.addEventListener('dragend', function(e) {
+                    if (e.target.classList.contains('admin-draggable')) {
+                        handleDragEnd(e);
+                    }
+                });
+                
+                calendar.dragListenerAdded = true;
             }
 
             async function assignSlot(slotId) {
@@ -1962,12 +1970,10 @@ app.get('/', (c) => {
                     const activityDate = new Date(formData.date);
                     const dayOfWeek = activityDate.getDay() === 0 ? 7 : activityDate.getDay(); // Dimanche = 7, Lundi = 1
                     
-                    // Générer un ID unique pour éviter les collisions
-                    let newId = Date.now();
-                    // Ajouter un petit délai pour éviter les collisions en cas de clics rapides
-                    while (schedule.find(s => s.id === newId)) {
-                        newId += 1;
-                    }
+                    // Générer un ID unique simple et sûr
+                    const baseId = Date.now();
+                    const randomSuffix = Math.floor(Math.random() * 1000);
+                    const newId = baseId + randomSuffix;
                     
                     // Créer la nouvelle activité
                     const newActivity = {
