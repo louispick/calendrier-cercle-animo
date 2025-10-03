@@ -253,42 +253,31 @@ app.get('/', (c) => {
                 </div>
             </header>
 
-            <!-- Section de sélection du bénévole -->
+            <!-- Méthode unique d'entrée du nom -->
             <div class="bg-white rounded-lg shadow-md p-4 lg:p-6 mb-6">
-                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                    <div class="flex-1">
-                        <h2 class="text-xl font-semibold mb-4">
-                            <i class="fas fa-user mr-2"></i>
-                            Je suis :
-                        </h2>
-                        <select id="volunteerSelect" class="w-full lg:w-auto px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            <option value="">Sélectionner votre nom...</option>
-                        </select>
+                <div class="max-w-md mx-auto">
+                    <h2 class="text-xl font-semibold mb-4 text-center">
+                        <i class="fas fa-user mr-2"></i>
+                        Votre nom
+                    </h2>
+                    <div class="flex gap-3">
+                        <input 
+                            type="text" 
+                            id="userName" 
+                            placeholder="Saisir votre nom..." 
+                            class="flex-1 px-4 py-3 text-lg border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            maxlength="50"
+                            autocomplete="name"
+                        >
+                        <button 
+                            id="validateNameBtn" 
+                            class="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                        >
+                            <i class="fas fa-check mr-1"></i>
+                            OK
+                        </button>
                     </div>
-                    
-                    <!-- Ajout de nouveau bénévole -->
-                    <div class="flex-1">
-                        <h3 class="text-lg font-semibold mb-4">
-                            <i class="fas fa-user-plus mr-2"></i>
-                            Nouveau bénévole ?
-                        </h3>
-                        <div class="flex gap-2">
-                            <input 
-                                type="text" 
-                                id="newVolunteerName" 
-                                placeholder="Votre nom" 
-                                class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                                maxlength="50"
-                            >
-                            <button 
-                                id="addVolunteerBtn" 
-                                class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
-                            >
-                                <i class="fas fa-plus mr-1"></i>
-                                Ajouter
-                            </button>
-                        </div>
-                    </div>
+                    <div id="nameStatus" class="mt-2 text-sm text-center"></div>
                 </div>
             </div>
 
@@ -324,121 +313,89 @@ app.get('/', (c) => {
 
         <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
         <script>
-            let currentVolunteer = null;
-            let volunteers = [];
+            let currentUser = null;
             let schedule = [];
-            let activityTypes = [];
 
-            // Initialisation
             document.addEventListener('DOMContentLoaded', async () => {
-                await loadData();
+                loadUserFromStorage();
                 setupEventListeners();
+                await loadSchedule();
             });
 
-            // Charger toutes les données
-            async function loadData() {
+            function loadUserFromStorage() {
+                const savedName = localStorage.getItem('cercle_animo_username');
+                if (savedName) {
+                    document.getElementById('userName').value = savedName;
+                    setCurrentUser(savedName);
+                }
+            }
+
+            function saveUserToStorage(name) {
+                localStorage.setItem('cercle_animo_username', name);
+            }
+
+            function setCurrentUser(name) {
+                currentUser = name;
+                updateNameStatus('Connecte en tant que: ' + name, 'text-green-600');
+                document.getElementById('loading').style.display = 'none';
+                renderCalendar();
+            }
+
+            function updateNameStatus(message, className = '') {
+                const statusDiv = document.getElementById('nameStatus');
+                statusDiv.textContent = message;
+                statusDiv.className = 'mt-2 text-sm text-center ' + className;
+            }
+
+            async function loadSchedule() {
                 try {
-                    const [volunteersResponse, scheduleResponse, activityTypesResponse] = await Promise.all([
-                        axios.get('/api/volunteers'),
-                        axios.get('/api/schedule'),
-                        axios.get('/api/activity-types')
-                    ]);
-
-                    volunteers = volunteersResponse.data;
-                    schedule = scheduleResponse.data;
-                    activityTypes = activityTypesResponse.data;
-
-                    populateVolunteerSelect();
+                    const response = await axios.get('/api/schedule');
+                    schedule = response.data;
                     renderCalendar();
-                    document.getElementById('loading').style.display = 'none';
                 } catch (error) {
-                    console.error('Erreur lors du chargement:', error);
+                    console.error('Erreur:', error);
                     document.getElementById('loading').innerHTML = 
                         '<p class="text-red-600">❌ Erreur lors du chargement des données</p>';
                 }
             }
 
-            // Peupler la liste des bénévoles
-            function populateVolunteerSelect() {
-                const select = document.getElementById('volunteerSelect');
-                // Garder la première option par défaut
-                select.innerHTML = '<option value="">Sélectionner votre nom...</option>';
-                
-                volunteers.forEach(volunteer => {
-                    const option = document.createElement('option');
-                    option.value = volunteer.id;
-                    option.textContent = volunteer.name;
-                    select.appendChild(option);
-                });
-            }
-
-            // Configuration des événements
             function setupEventListeners() {
-                // Sélection du bénévole
-                document.getElementById('volunteerSelect').addEventListener('change', (e) => {
-                    const volunteerId = parseInt(e.target.value);
-                    currentVolunteer = volunteers.find(v => v.id === volunteerId);
-                    
-                    // Afficher les options d'admin si c'est un admin
-                    const adminSection = document.getElementById('adminSection');
-                    if (currentVolunteer && currentVolunteer.is_admin) {
-                        adminSection.classList.remove('hidden');
-                    } else {
-                        adminSection.classList.add('hidden');
-                    }
-                    
-                    renderCalendar();
-                });
-
-                // Ajout d'un nouveau bénévole
-                document.getElementById('addVolunteerBtn').addEventListener('click', addNewVolunteer);
-                document.getElementById('newVolunteerName').addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter') {
-                        addNewVolunteer();
-                    }
+                document.getElementById('validateNameBtn').addEventListener('click', validateName);
+                document.getElementById('userName').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') validateName();
                 });
             }
-
-            // Ajouter un nouveau bénévole
-            async function addNewVolunteer() {
-                const nameInput = document.getElementById('newVolunteerName');
-                const name = nameInput.value.trim();
-
+            
+            function validateName() {
+                const name = document.getElementById('userName').value.trim();
+                
                 if (!name || name.length < 2) {
-                    alert('Veuillez entrer un nom d\\'au moins 2 caractères');
+                    updateNameStatus('Veuillez saisir un nom de au moins 2 caracteres', 'text-red-600');
                     return;
                 }
 
-                try {
-                    const response = await axios.post('/api/volunteers', { name });
-                    
-                    if (response.data.success) {
-                        // Ajouter le nouveau bénévole à la liste
-                        volunteers.push(response.data.volunteer);
-                        populateVolunteerSelect();
-                        
-                        // Sélectionner automatiquement le nouveau bénévole
-                        document.getElementById('volunteerSelect').value = response.data.volunteer.id;
-                        currentVolunteer = response.data.volunteer;
-                        
-                        // Vider le champ
-                        nameInput.value = '';
-                        
-                        // Re-rendre le calendrier
-                        renderCalendar();
-                        
-                        alert(\`Bienvenue \${name} ! Vous êtes maintenant dans la liste des bénévoles.\`);
-                    } else {
-                        alert('Erreur: ' + response.data.error);
-                    }
-                } catch (error) {
-                    console.error('Erreur lors de l\\'ajout:', error);
-                    alert('Erreur lors de l\\'ajout du bénévole');
-                }
+                setCurrentUser(name);
+                saveUserToStorage(name);
             }
 
-            // Générer le calendrier en tableau
+            function showError(message) {
+                updateNameStatus(message, 'text-red-600');
+                setTimeout(() => {
+                    if (currentUser) {
+                        updateNameStatus('Connecte en tant que: ' + currentUser, 'text-green-600');
+                    }
+                }, 3000);
+            }
+
+
+
             function renderCalendar() {
+                if (!currentUser) {
+                    document.getElementById('calendar').innerHTML = 
+                        '<p class="text-center text-gray-500 py-8">Veuillez saisir votre nom pour voir le planning</p>';
+                    return;
+                }
+
                 const calendar = document.getElementById('calendar');
                 calendar.innerHTML = '';
 
@@ -529,11 +486,11 @@ app.get('/', (c) => {
                 slotDiv.className = \`status-\${slot.status} rounded p-2 mb-2 cursor-pointer transition-all hover:shadow-md text-xs lg:text-sm\`;
                 
                 let actionButton = '';
-                if (currentVolunteer) {
+                if (currentUser) {
                     if (slot.status === 'available' || slot.status === 'searching') {
-                        actionButton = \`<button onclick="assignSlot(\${slot.id})" class="mt-1 px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 w-full">S'inscrire</button>\`;
-                    } else if (slot.volunteer_name === currentVolunteer.name) {
-                        actionButton = \`<button onclick="unassignSlot(\${slot.id})" class="mt-1 px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 w-full">Se désinscrire</button>\`;
+                        actionButton = '<button onclick="assignSlot(' + slot.id + ')" class="mt-1 px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 w-full">Inscription</button>';
+                    } else if (slot.volunteer_name === currentUser) {
+                        actionButton = '<button onclick="unassignSlot(' + slot.id + ')" class="mt-1 px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 w-full">Desinscription</button>';
                     }
                 }
 
@@ -549,43 +506,36 @@ app.get('/', (c) => {
                 return slotDiv;
             }
 
-            // S'inscrire sur un créneau
             async function assignSlot(slotId) {
-                if (!currentVolunteer) {
-                    alert('Veuillez d\\'abord sélectionner votre nom ou vous ajouter comme nouveau bénévole');
-                    return;
-                }
-
                 try {
-                    const response = await axios.post(\`/api/schedule/\${slotId}/assign\`, {
-                        volunteer_id: currentVolunteer.id
+                    const response = await axios.post('/api/schedule/' + slotId + '/assign', {
+                        volunteer_name: currentUser
                     });
 
                     if (response.data.success) {
                         // Mettre à jour localement pour un feedback immédiat
                         const slot = schedule.find(s => s.id == slotId);
                         if (slot) {
-                            slot.volunteer_name = currentVolunteer.name;
+                            slot.volunteer_name = currentUser;
                             slot.status = 'assigned';
                         }
                         renderCalendar();
                     } else {
-                        alert('Erreur: ' + response.data.error);
+                        showError('Erreur: ' + response.data.error);
                     }
                 } catch (error) {
-                    console.error('Erreur lors de l\\'inscription:', error);
-                    alert('Erreur lors de l\\'inscription');
+                    console.error('Erreur:', error);
+                    showError('Erreur lors de inscription');
                 }
             }
 
-            // Se désinscrire d'un créneau
             async function unassignSlot(slotId) {
-                if (!confirm('Êtes-vous sûr de vouloir vous désinscrire ?')) {
-                    return;
-                }
+                if (!confirm('Êtes-vous sûr de vouloir vous désinscrire ?')) return;
 
                 try {
-                    const response = await axios.post(\`/api/schedule/\${slotId}/unassign\`);
+                    const response = await axios.post('/api/schedule/' + slotId + '/unassign', {
+                        volunteer_name: currentUser
+                    });
 
                     if (response.data.success) {
                         // Mettre à jour localement pour un feedback immédiat
@@ -596,11 +546,11 @@ app.get('/', (c) => {
                         }
                         renderCalendar();
                     } else {
-                        alert('Erreur: ' + response.data.error);
+                        showError('Erreur: ' + response.data.error);
                     }
                 } catch (error) {
-                    console.error('Erreur lors de la désinscription:', error);
-                    alert('Erreur lors de la désinscription');
+                    console.error('Erreur:', error);
+                    showError('Erreur lors de la desinscription');
                 }
             }
 
