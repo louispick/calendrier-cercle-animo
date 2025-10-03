@@ -261,5 +261,29 @@ Cette application représente une **solution complète et moderne** pour la gest
 
 ---
 
+## 🆕 Dernières Améliorations (v1.1.0)
+
+### ✨ 10 Nouvelles Fonctionnalités Implémentées :
+
+1. **🎯 Simplification surlignage jour actuel** - Suppression du texte "AUJOURD'HUI" pour un design plus épuré
+2. **🗑️ Optimisation panneau admin** - Retrait du bouton "Ajouter Personne" redondant  
+3. **⚡ Prompts assignation simplifiés** - Saisie libre des noms sans liste prédéfinie
+4. **📝 Modal activités enrichie** - Titres personnalisés, champ horaire, suppression option "Nourrissage"
+5. **🔒 Protection drag-and-drop** - Désactivation du glisser-déposer pour les activités "Nourrissage"
+6. **⚠️ Toggle statut urgent** - Ajout/suppression statut urgent pour tous les créneaux
+7. **🥬 Légumes optimisés** - Suppression du texte par défaut "Récupération légumes au marché"
+8. **✏️ Modification d'activités** - Nouvelle fonctionnalité d'édition pour toutes les activités (sauf nourrissages)
+9. **➕ Repositionnement bouton ajout** - Bouton + déplacé en bas du calendrier
+10. **❌ Gestion semaines avancée** - Bouton X pour supprimer semaines entières avec protection
+
+### 🔧 Améliorations Techniques :
+- **Modal de modification** avec pré-remplissage automatique des données
+- **Event listeners** optimisés pour les nouveaux modaux
+- **Protection intelligente** contre suppression des 5 semaines importantes
+- **Échappement sécurisé** des caractères spéciaux dans les noms
+- **Corrections linguistiques** des messages d'erreur français
+
+---
+
 *Dernière mise à jour : 3 octobre 2025*  
-*Version : 1.0.0 - Complète et déployable*
+*Version : 1.1.0 - 10 nouvelles fonctionnalités + corrections*

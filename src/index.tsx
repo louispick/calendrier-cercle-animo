@@ -187,7 +187,7 @@ app.post('/api/schedule/:id/assign', async (c) => {
     }
   } catch (error) {
     console.error('Erreur API assign:', error);
-    return c.json({ error: 'Erreur lors de inscription: ' + error.message }, 500);
+    return c.json({ error: "Erreur lors de l'inscription: " + error.message }, 500);
   }
 });
 
@@ -225,18 +225,17 @@ app.get('/test', (c) => {
   return c.html(`
     <!DOCTYPE html>
     <html>
-    <head><title>Test Simple</title></head>
+    <head><title>Test Apostrophe Fix</title></head>
     <body>
-      <h1>Test JavaScript Simple</h1>
-      <button onclick="alert('Test fonctionne!')">Cliquer ici</button>
+      <h1>Test de l'apostrophe</h1>
       <script>
-        console.log('JavaScript chargé avec succès');
-        function testFunction() {
-          console.log('Fonction test appelée');
-          alert('Fonction appelée avec succès!');
+        console.log('✅ JavaScript chargé avec succès');
+        function testError() {
+          // Test avec apostrophe échappée
+          console.log('Test apostrophe dans l\\'inscription');
+          alert('L\\'apostrophe fonctionne !');
         }
-        // Test de onclick dynamique
-        document.body.innerHTML += '<button onclick="testFunction()">Test Dynamic</button>';
+        testError();
       </script>
     </body>
     </html>
