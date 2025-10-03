@@ -512,13 +512,13 @@ app.get('/', (c) => {
                 <div class="max-w-md mx-auto">
                     <h2 class="text-xl font-semibold mb-4 text-center">
                         <i class="fas fa-user mr-2"></i>
-                        Votre nom
+                        Ton prénom
                     </h2>
                     <div class="flex gap-3">
                         <input 
                             type="text" 
                             id="userName" 
-                            placeholder="Saisir votre nom..." 
+                            placeholder="Saisir ton prénom..." 
                             class="flex-1 px-4 py-3 text-lg border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                             maxlength="50"
                             autocomplete="name"
@@ -1009,7 +1009,7 @@ app.get('/', (c) => {
 
             function toggleAdminMode() {
                 if (!currentUser) {
-                    showError("Veuillez d'abord saisir votre nom");
+                    showError("Veuillez d'abord saisir ton prénom");
                     return;
                 }
 
@@ -1045,7 +1045,7 @@ app.get('/', (c) => {
                 
                 if (!currentUser) {
                     document.getElementById('calendar').innerHTML = 
-                        '<p class="text-center text-gray-500 py-8">Veuillez saisir votre nom pour voir le planning</p>';
+                        '<p class="text-center text-gray-500 py-8">Veuillez saisir ton prénom pour voir le planning</p>';
                     return;
                 }
 
@@ -1507,19 +1507,92 @@ app.get('/', (c) => {
                 if (!isAdminMode) return;
                 
                 try {
-                    showError('Fonctionnalité d ajout de nouvelle semaine à venir', 'text-green-600');
+                    // Calculer le nombre de semaines actuelles
+                    const existingWeeks = Math.max(...schedule.map(slot => Math.floor(slot.id / 20))) + 1;
+                    const newWeekIndex = existingWeeks;
+                    
+                    console.log('Ajout nouvelle semaine, index:', newWeekIndex);
+                    
+                    // Calculer la date de début de la nouvelle semaine
+                    const today = new Date();
+                    const currentMonday = new Date(today);
+                    currentMonday.setDate(today.getDate() - today.getDay() + 1);
+                    
+                    // Générer les activités pour la nouvelle semaine
+                    const newActivities = [];
+                    
+                    for (let day = 0; day < 7; day++) {
+                        const date = new Date(currentMonday);
+                        date.setDate(currentMonday.getDate() + (newWeekIndex * 7) + day);
+                        const dateStr = date.toISOString().split('T')[0];
+                        
+                        // Nourrissage quotidien
+                        const nourrissageId = newWeekIndex * 20 + day + 1;
+                        let nourrissageVolunteer = null;
+                        let nourrissageStatus = 'available';
+                        
+                        // Logique d'assignation similaire aux semaines existantes
+                        if (day === 1 || day === 6) { // Mardi et dimanche
+                            if (Math.random() > 0.5) {
+                                nourrissageVolunteer = ['Alice', 'Les Furgettes'][Math.floor(Math.random() * 2)];
+                                nourrissageStatus = 'assigned';
+                            }
+                        }
+                        
+                        const nourrissageActivity = {
+                            id: nourrissageId,
+                            date: dateStr,
+                            day_of_week: day + 1,
+                            activity_type: 'Nourrissage',
+                            volunteer_name: nourrissageVolunteer,
+                            status: nourrissageStatus,
+                            color: '#dc3545',
+                            max_volunteers: 1,
+                            notes: '',
+                            is_urgent_when_free: day === 0 || day === 3 // Lundi et jeudi urgents
+                        };
+                        
+                        newActivities.push(nourrissageActivity);
+                        
+                        // Légumes le mardi occasionnellement
+                        if (day === 1 && Math.random() > 0.3) {
+                            const legumesActivity = {
+                                id: newWeekIndex * 20 + day + 10,
+                                date: dateStr,
+                                day_of_week: day + 1,
+                                activity_type: 'Légumes',
+                                volunteer_name: Math.random() > 0.5 ? 'Clement' : null,
+                                status: Math.random() > 0.5 ? 'assigned' : 'available',
+                                color: '#ffc107',
+                                max_volunteers: 2,
+                                notes: '',
+                                is_urgent_when_free: false
+                            };
+                            
+                            newActivities.push(legumesActivity);
+                        }
+                    }
+                    
+                    // Ajouter les nouvelles activités au planning
+                    schedule.push(...newActivities);
                     
                     // Ajouter à l'historique
                     actionHistory.addAction({
                         type: 'add_new_week',
-                        data: { admin: currentUser },
-                        undoData: null
+                        data: { 
+                            weekIndex: newWeekIndex,
+                            activities: newActivities,
+                            admin: currentUser 
+                        },
+                        undoData: { activitiesToRemove: newActivities.map(a => a.id) }
                     });
                     
+                    // Rafraîchir l'affichage
+                    renderCalendar();
                     updateUndoRedoButtons();
                     
-                    // TODO: Implémenter l'ajout réel de nouvelle semaine
-                    console.log('Ajouter nouvelle semaine à la fin');
+                    showError('Nouvelle semaine ' + (newWeekIndex + 1) + ' ajoutée avec ' + newActivities.length + ' activités', 'text-green-600');
+                    
                 } catch (error) {
                     console.error('Erreur:', error);
                     showError("Erreur lors de l'ajout de nouvelle semaine");
@@ -1558,8 +1631,18 @@ app.get('/', (c) => {
                     const action = actionHistory.undo();
                     if (!action) return;
 
-                    // Simuler l'annulation (en mode développement)
-                    showError('Action annulee: ' + action.type);
+                    // Traiter différents types d'actions
+                    if (action.type === 'add_new_week' && action.undoData) {
+                        // Supprimer les activités qui avaient été ajoutées
+                        const activitiesToRemove = action.undoData.activitiesToRemove;
+                        schedule = schedule.filter(slot => !activitiesToRemove.includes(slot.id));
+                        renderCalendar();
+                        showError('Semaine supprimée (annulation)', 'text-orange-600');
+                    } else {
+                        // Pour les autres types d'actions, juste afficher un message
+                        showError('Action annulée: ' + action.type, 'text-orange-600');
+                    }
+                    
                     updateUndoRedoButtons();
                     
                     // En production, ici on ferait l'appel API pour annuler
@@ -1567,7 +1650,7 @@ app.get('/', (c) => {
                     
                 } catch (error) {
                     console.error('Erreur:', error);
-                    showError('Erreur lors de annulation');
+                    showError("Erreur lors de l'annulation");
                 }
             }
 
@@ -1576,8 +1659,18 @@ app.get('/', (c) => {
                     const action = actionHistory.redo();
                     if (!action) return;
 
-                    // Simuler la restauration (en mode développement)
-                    showError('Action restauree: ' + action.type);
+                    // Traiter différents types d'actions
+                    if (action.type === 'add_new_week' && action.data) {
+                        // Restaurer les activités qui avaient été ajoutées
+                        const activitiesToRestore = action.data.activities;
+                        schedule.push(...activitiesToRestore);
+                        renderCalendar();
+                        showError('Semaine restaurée (refait)', 'text-green-600');
+                    } else {
+                        // Pour les autres types d'actions, juste afficher un message
+                        showError('Action restaurée: ' + action.type, 'text-green-600');
+                    }
+                    
                     updateUndoRedoButtons();
                     
                     // En production, ici on ferait l'appel API pour restaurer
