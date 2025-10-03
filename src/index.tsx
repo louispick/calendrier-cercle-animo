@@ -1735,6 +1735,22 @@ app.get('/', (c) => {
                         schedule.push(...activitiesToRestore);
                         renderCalendar();
                         showError('Semaine restaurée (annulation suppression)', 'text-orange-600');
+                    } else if (action.type === 'add_activity' && action.undoData) {
+                        // Supprimer l'activité qui avait été ajoutée
+                        const activityId = action.undoData.activityId;
+                        schedule = schedule.filter(activity => activity.id !== activityId);
+                        renderCalendar();
+                        showError('Activité supprimée (annulation)', 'text-orange-600');
+                    } else if (action.type === 'modify_activity' && action.undoData) {
+                        // Restaurer l'ancienne version de l'activité
+                        const slotId = action.undoData.slotId;
+                        const oldData = action.undoData.oldData;
+                        const slotIndex = schedule.findIndex(s => s.id === slotId);
+                        if (slotIndex !== -1) {
+                            schedule[slotIndex] = oldData;
+                            renderCalendar();
+                            showError('Modifications annulées', 'text-orange-600');
+                        }
                     } else {
                         // Pour les autres types d'actions, juste afficher un message
                         showError('Action annulée: ' + action.type, 'text-orange-600');
@@ -1769,6 +1785,22 @@ app.get('/', (c) => {
                         schedule = schedule.filter(slot => Math.floor(slot.id / 20) !== weekIndex);
                         renderCalendar();
                         showError('Semaine supprimée (refait)', 'text-red-600');
+                    } else if (action.type === 'add_activity' && action.data) {
+                        // Refaire l'ajout d'activité
+                        const activityToRestore = action.data.activity;
+                        schedule.push(activityToRestore);
+                        renderCalendar();
+                        showError('Activité restaurée (refait)', 'text-green-600');
+                    } else if (action.type === 'modify_activity' && action.data) {
+                        // Refaire la modification d'activité
+                        const slotId = action.data.slotId;
+                        const newData = action.data.newData;
+                        const slotIndex = schedule.findIndex(s => s.id === slotId);
+                        if (slotIndex !== -1) {
+                            schedule[slotIndex] = newData;
+                            renderCalendar();
+                            showError('Modifications restaurées (refait)', 'text-green-600');
+                        }
                     } else {
                         // Pour les autres types d'actions, juste afficher un message
                         showError('Action restaurée: ' + action.type, 'text-green-600');
@@ -1907,32 +1939,40 @@ app.get('/', (c) => {
                         return;
                     }
 
-                    // En mode développement, simuler l'ajout
+                    // Calculer le day_of_week à partir de la date
+                    const activityDate = new Date(formData.date);
+                    const dayOfWeek = activityDate.getDay() === 0 ? 7 : activityDate.getDay(); // Dimanche = 7, Lundi = 1
+                    
+                    // Créer la nouvelle activité
                     const newActivity = {
                         id: Date.now(),
                         date: formData.date,
+                        day_of_week: dayOfWeek,
                         activity_type: formData.type,
                         volunteer_name: null,
                         status: formData.isUrgent ? 'urgent' : 'available',
                         max_volunteers: formData.maxVolunteers,
                         notes: formData.notes,
+                        time: formData.time,
                         is_urgent_when_free: formData.isUrgent,
                         color: getColorForActivityType(formData.type)
                     };
+
+                    // Ajouter l'activité au planning
+                    schedule.push(newActivity);
 
                     // Ajouter à l'historique
                     actionHistory.addAction({
                         type: 'add_activity',
                         data: { activity: newActivity, user: currentUser },
-                        undoData: null
+                        undoData: { activityId: newActivity.id }
                     });
 
+                    // Rafraîchir l'affichage
+                    renderCalendar();
                     updateUndoRedoButtons();
                     closeAddActivityModal();
                     showError('Activité "' + formData.type + '" ajoutée pour le ' + formData.date, 'text-green-600');
-                    
-                    // Recharger le planning (en production)
-                    // await loadSchedule();
                     
                 } catch (error) {
                     console.error('Erreur:', error);
@@ -2093,15 +2133,21 @@ app.get('/', (c) => {
                     // Sauvegarder l'ancien état pour l'historique
                     const oldSlot = { ...schedule[slotIndex] };
 
+                    // Calculer le day_of_week à partir de la nouvelle date
+                    const activityDate = new Date(formData.date);
+                    const dayOfWeek = activityDate.getDay() === 0 ? 7 : activityDate.getDay(); // Dimanche = 7, Lundi = 1
+                    
                     // Mettre à jour l'activité
                     schedule[slotIndex] = {
                         ...schedule[slotIndex],
                         activity_type: formData.type,
                         date: formData.date,
+                        day_of_week: dayOfWeek,
                         time: formData.time,
                         max_volunteers: formData.maxVolunteers,
                         notes: formData.notes,
-                        is_urgent_when_free: formData.isUrgent
+                        is_urgent_when_free: formData.isUrgent,
+                        color: getColorForActivityType(formData.type)
                     };
 
                     // En production, faire l'appel API
@@ -2122,7 +2168,7 @@ app.get('/', (c) => {
                     });
 
                     // Reconstruire le calendrier avec les nouvelles données
-                    buildCalendar();
+                    renderCalendar();
                     
                     updateUndoRedoButtons();
                     closeModifyActivityModal();
