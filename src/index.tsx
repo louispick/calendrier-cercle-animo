@@ -297,6 +297,34 @@ app.get('/', (c) => {
               min-height: 60px;
             }
           }
+          
+          /* Modales */
+          .modal {
+            backdrop-filter: blur(4px);
+          }
+          
+          .modal-content {
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            transform: translateY(-20px);
+            animation: modalSlideIn 0.3s ease-out forwards;
+          }
+          
+          @keyframes modalSlideIn {
+            to {
+              transform: translateY(0);
+            }
+          }
+          
+          .modal.hidden .modal-content {
+            animation: modalSlideOut 0.3s ease-in forwards;
+          }
+          
+          @keyframes modalSlideOut {
+            to {
+              transform: translateY(-20px);
+              opacity: 0;
+            }
+          }
         </style>
     </head>
     <body class="bg-gray-100 min-h-screen">
@@ -392,10 +420,14 @@ app.get('/', (c) => {
                     <i class="fas fa-tools mr-2"></i>
                     Administration
                 </h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
                     <button id="addActivityBtn" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors">
                         <i class="fas fa-plus-circle mr-2"></i>
-                        Ajouter Activité/Planning
+                        Ajouter Activité
+                    </button>
+                    <button id="addPersonBtn" class="px-4 py-2 bg-teal-500 text-white rounded hover:bg-teal-600 transition-colors">
+                        <i class="fas fa-user-plus mr-2"></i>
+                        Ajouter Personne
                     </button>
                     <button id="undoBtn" class="px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 transition-colors" disabled>
                         <i class="fas fa-undo mr-2"></i>
@@ -425,6 +457,129 @@ app.get('/', (c) => {
             <!-- Calendrier -->
             <div id="calendar" class="space-y-6">
                 <!-- Le calendrier sera généré ici par JavaScript -->
+            </div>
+
+            <!-- Modal Ajouter Activité -->
+            <div id="addActivityModal" class="modal hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+                <div class="modal-content bg-white rounded-lg p-6 mx-4 max-w-md w-full">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold">
+                            <i class="fas fa-plus-circle mr-2"></i>
+                            Ajouter une Activité
+                        </h3>
+                        <button id="closeAddActivityModal" class="text-gray-500 hover:text-gray-700">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <form id="addActivityForm">
+                        <div class="mb-4">
+                            <label for="activityType" class="block text-sm font-medium text-gray-700 mb-2">
+                                Type d&apos;activité
+                            </label>
+                            <select id="activityType" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" required>
+                                <option value="">Sélectionner un type</option>
+                                <option value="Nourrissage">Nourrissage</option>
+                                <option value="Légumes">Légumes</option>
+                                <option value="Réunion">Réunion</option>
+                                <option value="Autre">Autre</option>
+                            </select>
+                        </div>
+                        <div class="mb-4">
+                            <label for="activityDate" class="block text-sm font-medium text-gray-700 mb-2">
+                                Date
+                            </label>
+                            <input type="date" id="activityDate" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" required>
+                        </div>
+                        <div class="mb-4">
+                            <label for="maxVolunteers" class="block text-sm font-medium text-gray-700 mb-2">
+                                Nombre maximum de bénévoles
+                            </label>
+                            <input type="number" id="maxVolunteers" min="1" max="10" value="1" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" required>
+                        </div>
+                        <div class="mb-4">
+                            <label for="activityNotes" class="block text-sm font-medium text-gray-700 mb-2">
+                                Notes (optionnel)
+                            </label>
+                            <textarea id="activityNotes" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Détails supplémentaires..."></textarea>
+                        </div>
+                        <div class="mb-6">
+                            <label class="flex items-center">
+                                <input type="checkbox" id="isUrgent" class="mr-2">
+                                <span class="text-sm text-gray-700">Marquer comme urgent si libre</span>
+                            </label>
+                        </div>
+                        <div class="flex gap-3">
+                            <button type="button" id="cancelAddActivity" class="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 transition-colors">
+                                Annuler
+                            </button>
+                            <button type="submit" class="flex-1 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors">
+                                <i class="fas fa-check mr-2"></i>
+                                Ajouter
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Modal Ajouter Personne -->
+            <div id="addPersonModal" class="modal hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+                <div class="modal-content bg-white rounded-lg p-6 mx-4 max-w-md w-full">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold">
+                            <i class="fas fa-user-plus mr-2"></i>
+                            Ajouter une Personne
+                        </h3>
+                        <button id="closeAddPersonModal" class="text-gray-500 hover:text-gray-700">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <form id="addPersonForm">
+                        <div class="mb-4">
+                            <label for="personName" class="block text-sm font-medium text-gray-700 mb-2">
+                                Nom du bénévole
+                            </label>
+                            <input type="text" id="personName" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Nom complet" required minlength="2">
+                        </div>
+                        <div class="mb-6">
+                            <label class="flex items-center">
+                                <input type="checkbox" id="isAdmin" class="mr-2">
+                                <span class="text-sm text-gray-700">Droits d&apos;administration</span>
+                            </label>
+                        </div>
+                        <div class="flex gap-3">
+                            <button type="button" id="cancelAddPerson" class="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 transition-colors">
+                                Annuler
+                            </button>
+                            <button type="submit" class="flex-1 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors">
+                                <i class="fas fa-check mr-2"></i>
+                                Ajouter
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Modal Historique -->
+            <div id="historyModal" class="modal hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+                <div class="modal-content bg-white rounded-lg p-6 mx-4 max-w-lg w-full max-h-96">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold">
+                            <i class="fas fa-history mr-2"></i>
+                            Historique des Actions
+                        </h3>
+                        <button id="closeHistoryModal" class="text-gray-500 hover:text-gray-700">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div id="historyList" class="space-y-2 max-h-64 overflow-y-auto">
+                        <!-- L'historique sera généré ici -->
+                    </div>
+                    <div class="mt-4 text-center">
+                        <button id="closeHistoryBtn" class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors">
+                            Fermer
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <!-- Loading -->
@@ -553,12 +708,36 @@ app.get('/', (c) => {
                 document.getElementById('toggleAdminBtn').addEventListener('click', toggleAdminMode);
                 
                 // Admin panel buttons
-                document.getElementById('addActivityBtn').addEventListener('click', () => {
-                    showError('Fonctionnalité à venir dans la prochaine étape');
-                });
+                document.getElementById('addActivityBtn').addEventListener('click', openAddActivityModal);
+                document.getElementById('addPersonBtn').addEventListener('click', openAddPersonModal);
                 document.getElementById('undoBtn').addEventListener('click', undoAction);
                 document.getElementById('redoBtn').addEventListener('click', redoAction);
                 document.getElementById('historyBtn').addEventListener('click', openHistoryModal);
+                
+                // Modal event listeners - Add Activity
+                document.getElementById('closeAddActivityModal').addEventListener('click', closeAddActivityModal);
+                document.getElementById('cancelAddActivity').addEventListener('click', closeAddActivityModal);
+                document.getElementById('addActivityForm').addEventListener('submit', submitAddActivity);
+                
+                // Modal event listeners - Add Person  
+                document.getElementById('closeAddPersonModal').addEventListener('click', closeAddPersonModal);
+                document.getElementById('cancelAddPerson').addEventListener('click', closeAddPersonModal);
+                document.getElementById('addPersonForm').addEventListener('submit', submitAddPerson);
+                
+                // Modal event listeners - History
+                document.getElementById('closeHistoryModal').addEventListener('click', closeHistoryModal);
+                document.getElementById('closeHistoryBtn').addEventListener('click', closeHistoryModal);
+                
+                // Close modals when clicking outside
+                document.getElementById('addActivityModal').addEventListener('click', (e) => {
+                    if (e.target.id === 'addActivityModal') closeAddActivityModal();
+                });
+                document.getElementById('addPersonModal').addEventListener('click', (e) => {
+                    if (e.target.id === 'addPersonModal') closeAddPersonModal();
+                });
+                document.getElementById('historyModal').addEventListener('click', (e) => {
+                    if (e.target.id === 'historyModal') closeHistoryModal();
+                });
                 
                 // Update undo/redo buttons only when needed
                 updateUndoRedoButtons();
@@ -892,49 +1071,157 @@ app.get('/', (c) => {
                 }
             }
 
+            // === FONCTIONS MODALES ===
+
             function openHistoryModal() {
                 const history = actionHistory.getHistory();
-                let historyHtml = '<div class="space-y-2">';
+                const historyList = document.getElementById('historyList');
                 
                 if (history.length === 0) {
-                    historyHtml += '<p class="text-gray-500 text-center py-4">Aucun historique</p>';
+                    historyList.innerHTML = '<p class="text-gray-500 text-center py-4">Aucun historique</p>';
                 } else {
-                    history.forEach((action, index) => {
+                    historyList.innerHTML = history.map(action => {
                         const timeStr = action.timestamp.toLocaleTimeString('fr-FR');
-                        historyHtml += 
-                            '<div class="p-3 bg-gray-50 rounded border">' +
-                                '<div class="font-medium">' + action.type + '</div>' +
-                                '<div class="text-sm text-gray-500">' + timeStr + '</div>' +
+                        return '<div class="p-3 bg-gray-50 rounded border">' +
+                            '<div class="font-medium">' + action.type + '</div>' +
+                            '<div class="text-sm text-gray-500">' + timeStr + '</div>' +
                             '</div>';
-                    });
+                    }).join('');
                 }
                 
-                historyHtml += '</div>';
+                document.getElementById('historyModal').classList.remove('hidden');
+            }
+
+            function closeHistoryModal() {
+                document.getElementById('historyModal').classList.add('hidden');
+            }
+
+            function openAddActivityModal() {
+                // Réinitialiser le formulaire
+                document.getElementById('addActivityForm').reset();
                 
-                // Créer une modal simple pour l'historique
-                const modal = document.createElement('div');
-                modal.className = 'fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4';
-                modal.innerHTML = 
-                    '<div class="bg-white rounded-lg shadow-xl max-w-md w-full max-h-96 overflow-y-auto">' +
-                        '<div class="p-6">' +
-                            '<div class="flex justify-between items-center mb-4">' +
-                                '<h3 class="text-lg font-semibold">Historique des Actions</h3>' +
-                                '<button onclick="this.closest(\\'.fixed\\').remove()" class="text-gray-400 hover:text-gray-600">' +
-                                    '<i class="fas fa-times text-xl"></i>' +
-                                '</button>' +
-                            '</div>' +
-                            historyHtml +
-                        '</div>' +
-                    '</div>';
+                // Définir la date par défaut à aujourd'hui
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('activityDate').value = today;
                 
-                document.body.appendChild(modal);
+                document.getElementById('addActivityModal').classList.remove('hidden');
+            }
+
+            function closeAddActivityModal() {
+                document.getElementById('addActivityModal').classList.add('hidden');
+            }
+
+            function openAddPersonModal() {
+                // Réinitialiser le formulaire
+                document.getElementById('addPersonForm').reset();
+                document.getElementById('addPersonModal').classList.remove('hidden');
+            }
+
+            function closeAddPersonModal() {
+                document.getElementById('addPersonModal').classList.add('hidden');
+            }
+
+            async function submitAddActivity(e) {
+                e.preventDefault();
                 
-                // Fermer en cliquant à l'extérieur
-                modal.addEventListener('click', (e) => {
-                    if (e.target === modal) {
-                        document.body.removeChild(modal);
+                try {
+                    const formData = {
+                        type: document.getElementById('activityType').value,
+                        date: document.getElementById('activityDate').value,
+                        maxVolunteers: parseInt(document.getElementById('maxVolunteers').value),
+                        notes: document.getElementById('activityNotes').value.trim(),
+                        isUrgent: document.getElementById('isUrgent').checked
+                    };
+
+                    // Validation
+                    if (!formData.type || !formData.date) {
+                        showError('Veuillez remplir tous les champs obligatoires');
+                        return;
                     }
-                });
+
+                    // En mode développement, simuler l'ajout
+                    const newActivity = {
+                        id: Date.now(),
+                        date: formData.date,
+                        activity_type: formData.type,
+                        volunteer_name: null,
+                        status: formData.isUrgent ? 'urgent' : 'available',
+                        max_volunteers: formData.maxVolunteers,
+                        notes: formData.notes,
+                        is_urgent_when_free: formData.isUrgent,
+                        color: getColorForActivityType(formData.type)
+                    };
+
+                    // Ajouter à l'historique
+                    actionHistory.addAction({
+                        type: 'add_activity',
+                        data: { activity: newActivity, user: currentUser },
+                        undoData: null
+                    });
+
+                    updateUndoRedoButtons();
+                    closeAddActivityModal();
+                    showError('Activité "' + formData.type + '" ajoutée pour le ' + formData.date, 'text-green-600');
+                    
+                    // Recharger le planning (en production)
+                    // await loadSchedule();
+                    
+                } catch (error) {
+                    console.error('Erreur:', error);
+                    showError('Erreur lors de l\'ajout de l\'activité');
+                }
+            }
+
+            async function submitAddPerson(e) {
+                e.preventDefault();
+                
+                try {
+                    const formData = {
+                        name: document.getElementById('personName').value.trim(),
+                        isAdmin: document.getElementById('isAdmin').checked
+                    };
+
+                    // Validation
+                    if (!formData.name || formData.name.length < 2) {
+                        showError('Le nom doit contenir au moins 2 caractères');
+                        return;
+                    }
+
+                    // En mode développement, simuler l'ajout
+                    const newPerson = {
+                        id: Date.now(),
+                        name: formData.name,
+                        is_admin: formData.isAdmin
+                    };
+
+                    // Ajouter à l'historique
+                    actionHistory.addAction({
+                        type: 'add_person',
+                        data: { person: newPerson, user: currentUser },
+                        undoData: null
+                    });
+
+                    updateUndoRedoButtons();
+                    closeAddPersonModal();
+                    showError('Bénévole "' + formData.name + '" ajouté avec succès', 'text-green-600');
+                    
+                    // En production, recharger la liste des bénévoles
+                    // await loadVolunteers();
+                    
+                } catch (error) {
+                    console.error('Erreur:', error);
+                    showError('Erreur lors de l\'ajout du bénévole');
+                }
+            }
+
+            function getColorForActivityType(type) {
+                const colorMap = {
+                    'Nourrissage': '#dc3545',
+                    'Légumes': '#ffc107', 
+                    'Réunion': '#6f42c1',
+                    'Autre': '#20c997'
+                };
+                return colorMap[type] || '#6c757d';
             }
 
             // Utilitaires
