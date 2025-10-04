@@ -1257,7 +1257,8 @@ app.get('/', (c) => {
                         let deleteButton = '';
                         if (slot.activity_type !== 'Nourrissage') {
                             modifyButton = '<button onclick="modifyActivity(' + slot.id + ')" class="w-full px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600">Modifier</button>';
-                            deleteButton = '<button onclick="deleteActivity(' + slot.id + ')" class="w-full px-2 py-1 bg-red-800 text-white text-xs rounded hover:bg-red-900" title="Supprimer définitivement cette activité">🗑️ Supprimer</button>';
+                            // Temporairement commenté pour debug
+                            // deleteButton = '<button onclick="deleteActivity(' + slot.id + ')" class="w-full px-2 py-1 bg-red-800 text-white text-xs rounded hover:bg-red-900" title="Supprimer">Supprimer</button>';
                         }
                         
                         if (slot.volunteer_name) {
@@ -2238,67 +2239,7 @@ app.get('/', (c) => {
                 }
             }
 
-            function deleteActivity(slotId) {
-                if (!isAdminMode) {
-                    showError('Seuls les administrateurs peuvent supprimer des activités');
-                    return;
-                }
-                
-                try {
-                    // Trouver l'activité à supprimer
-                    const slotIndex = schedule.findIndex(s => s.id === slotId);
-                    if (slotIndex === -1) {
-                        showError('Activité non trouvée');
-                        return;
-                    }
-                    
-                    const activityToDelete = schedule[slotIndex];
-                    
-                    // Interdire la suppression des nourrissages
-                    if (activityToDelete.activity_type === 'Nourrissage') {
-                        showError('Les activités de nourrissage ne peuvent pas être supprimées');
-                        return;
-                    }
-                    
-                    // Demander confirmation
-                    const activityInfo = activityToDelete.activity_type + 
-                        (activityToDelete.time ? ' à ' + activityToDelete.time : '') + 
-                        ' le ' + activityToDelete.date;
-                    
-                    if (!confirm('Supprimer définitivement l\'activité "' + activityInfo + '" ?\\n\\nCette action ne peut pas être annulée via l\'historique.')) {
-                        return;
-                    }
-                    
-                    // Sauvegarder l'activité pour l'historique
-                    const deletedActivity = { ...activityToDelete };
-                    
-                    // Supprimer l'activité du planning
-                    schedule.splice(slotIndex, 1);
-                    
-                    // Ajouter à l'historique
-                    actionHistory.addAction({
-                        type: 'delete_activity',
-                        data: { 
-                            activityId: slotId,
-                            admin: currentUser 
-                        },
-                        undoData: { 
-                            deletedActivity: deletedActivity,
-                            originalIndex: slotIndex
-                        }
-                    });
-                    
-                    // Rafraîchir l'affichage
-                    renderCalendar();
-                    updateUndoRedoButtons();
-                    
-                    showError('Activité "' + activityToDelete.activity_type + '" supprimée définitivement', 'text-red-600');
-                    
-                } catch (error) {
-                    console.error('Erreur:', error);
-                    showError('Erreur lors de la suppression de l\'activité');
-                }
-            }
+            // Fonction deleteActivity temporairement supprimée pour debug
 
             function getColorForActivityType(type) {
                 const colorMap = {
