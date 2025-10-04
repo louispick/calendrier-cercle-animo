@@ -1257,8 +1257,7 @@ app.get('/', (c) => {
                         let deleteButton = '';
                         if (slot.activity_type !== 'Nourrissage') {
                             modifyButton = '<button onclick="modifyActivity(' + slot.id + ')" class="w-full px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600">Modifier</button>';
-                            // Temporairement commenté pour debug
-                            // deleteButton = '<button onclick="deleteActivity(' + slot.id + ')" class="w-full px-2 py-1 bg-red-800 text-white text-xs rounded hover:bg-red-900" title="Supprimer">Supprimer</button>';
+                            // deleteButton = '<button onclick="deleteActivity(' + slot.id + ')" class="w-full px-2 py-1 bg-red-800 text-white text-xs rounded hover:bg-red-900">Supprimer</button>';
                         }
                         
                         if (slot.volunteer_name) {
@@ -2239,7 +2238,52 @@ app.get('/', (c) => {
                 }
             }
 
-            // Fonction deleteActivity temporairement supprimée pour debug
+            function deleteActivity(slotId) {
+                if (!isAdminMode) {
+                    showError('Seuls les administrateurs peuvent supprimer des activités');
+                    return;
+                }
+                
+                try {
+                    const slotIndex = schedule.findIndex(s => s.id === slotId);
+                    if (slotIndex === -1) {
+                        showError('Activité non trouvée');
+                        return;
+                    }
+                    
+                    const activity = schedule[slotIndex];
+                    
+                    if (activity.activity_type === 'Nourrissage') {
+                        showError('Les activités de nourrissage ne peuvent pas être supprimées');
+                        return;
+                    }
+                    
+                    const activityInfo = activity.activity_type + 
+                        (activity.time ? ' à ' + activity.time : '') + 
+                        ' le ' + activity.date;
+                    
+                    if (!confirm('Supprimer définitivement cette activité ?\n\n' + activityInfo)) {
+                        return;
+                    }
+                    
+                    const deletedActivity = { ...activity };
+                    schedule.splice(slotIndex, 1);
+                    
+                    actionHistory.addAction({
+                        type: 'delete_activity',
+                        data: { activityId: slotId, admin: currentUser },
+                        undoData: { deletedActivity: deletedActivity, originalIndex: slotIndex }
+                    });
+                    
+                    renderCalendar();
+                    updateUndoRedoButtons();
+                    showError('Activité supprimée avec succès', 'text-red-600');
+                    
+                } catch (error) {
+                    console.error('Erreur:', error);
+                    showError('Erreur lors de la suppression');
+                }
+            }
 
             function getColorForActivityType(type) {
                 const colorMap = {
