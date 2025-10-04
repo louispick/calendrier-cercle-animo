@@ -1782,19 +1782,7 @@ app.get('/', (c) => {
                             renderCalendar();
                             showError('Modifications annulées', 'text-orange-600');
                         }
-                    } else if (action.type === 'delete_activity' && action.undoData) {
-                        // Restaurer l'activité qui avait été supprimée
-                        const deletedActivity = action.undoData.deletedActivity;
-                        const originalIndex = action.undoData.originalIndex;
-                        
-                        // Réinsérer à sa position originale ou à la fin si l'index n'est plus valide
-                        if (originalIndex >= 0 && originalIndex <= schedule.length) {
-                            schedule.splice(originalIndex, 0, deletedActivity);
-                        } else {
-                            schedule.push(deletedActivity);
-                        }
-                        renderCalendar();
-                        showError('Activité restaurée (annulation suppression)', 'text-orange-600');
+                    // delete_activity undo handling removed
                     } else {
                         // Pour les autres types d'actions, juste afficher un message
                         showError('Action annulée: ' + action.type, 'text-orange-600');
@@ -1845,12 +1833,7 @@ app.get('/', (c) => {
                             renderCalendar();
                             showError('Modifications restaurées (refait)', 'text-green-600');
                         }
-                    } else if (action.type === 'delete_activity' && action.data) {
-                        // Refaire la suppression d'activité
-                        const activityId = action.data.activityId;
-                        schedule = schedule.filter(activity => activity.id !== activityId);
-                        renderCalendar();
-                        showError('Activité supprimée (refait)', 'text-red-600');
+                    // delete_activity redo handling removed
                     } else {
                         // Pour les autres types d'actions, juste afficher un message
                         showError('Action restaurée: ' + action.type, 'text-green-600');
@@ -2238,52 +2221,7 @@ app.get('/', (c) => {
                 }
             }
 
-            function deleteActivity(slotId) {
-                if (!isAdminMode) {
-                    showError('Seuls les administrateurs peuvent supprimer des activités');
-                    return;
-                }
-                
-                try {
-                    const slotIndex = schedule.findIndex(s => s.id === slotId);
-                    if (slotIndex === -1) {
-                        showError('Activité non trouvée');
-                        return;
-                    }
-                    
-                    const activity = schedule[slotIndex];
-                    
-                    if (activity.activity_type === 'Nourrissage') {
-                        showError('Les activités de nourrissage ne peuvent pas être supprimées');
-                        return;
-                    }
-                    
-                    const activityInfo = activity.activity_type + 
-                        (activity.time ? ' à ' + activity.time : '') + 
-                        ' le ' + activity.date;
-                    
-                    if (!confirm('Supprimer définitivement cette activité ?\n\n' + activityInfo)) {
-                        return;
-                    }
-                    
-                    const deletedActivity = { ...activity };
-                    schedule.splice(slotIndex, 1);
-                    
-                    actionHistory.addAction({
-                        type: 'delete_activity',
-                        data: { activityId: slotId, admin: currentUser },
-                        undoData: { deletedActivity: deletedActivity, originalIndex: slotIndex }
-                    });
-                    
-                    renderCalendar();
-                    updateUndoRedoButtons();
-                    showError('Activité supprimée avec succès', 'text-red-600');
-                    
-                } catch (error) {
-                    console.error('Erreur:', error);
-                    showError('Erreur lors de la suppression');
-                }
-            }
+            // deleteActivity function removed to fix parsing error
 
             function getColorForActivityType(type) {
                 const colorMap = {
