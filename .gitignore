@@ -1,5 +1,8 @@
 # Dependencies
 node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Runtime data
 pids
@@ -7,13 +10,15 @@ pids
 *.seed
 *.pid.lock
 
-# Compiled binary addons (https://nodejs.org/api/addons.html)
-build
-dist
+# Compiled binary addons
+build/
 
 # dotenv environment variables file
 .env
-.dev.vars
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
 # PM2
 .pm2/
@@ -23,9 +28,39 @@ logs/
 
 # Wrangler
 .wrangler/
+wrangler.toml
+
+# Development
+.dev.vars
+*.local
 
 # Backup files
 *.backup
 *.bak
 *.tar.gz
 *.zip
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# TypeScript
+*.tsbuildinfo
+
+# Build outputs
+dist/
+!dist/.gitkeep
