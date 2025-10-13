@@ -187,7 +187,7 @@ app.post('/api/schedule/:id/assign', async (c) => {
     }
   } catch (error) {
     console.error('Erreur API assign:', error);
-    return c.json({ error: "Erreur lors de l'inscription: " + error.message }, 500);
+    return c.json({ error: "Erreur lors de l\'inscription: " + error.message }, 500);
   }
 });
 
@@ -224,15 +224,29 @@ app.post('/api/schedule/:id/unassign', async (c) => {
 app.post('/api/schedule', async (c) => {
   try {
     const newSchedule = await c.req.json();
-    console.log('💾 Planning save requested - count:', newSchedule.length);
+    
+    console.log('💾 Sauvegarde du planning demandée - Nombre d\'activités:', newSchedule.length);
+    
+    // Mode développement - simulation de sauvegarde
+    // En production, ici on sauvegarderait dans la base D1
+    
+    // Validation basique
+    if (!Array.isArray(newSchedule)) {
+      return c.json({ error: 'Le planning doit être un tableau d\'activités' }, 400);
+    }
+    
+    // Simuler une sauvegarde réussie
+    console.log('✅ Planning sauvegardé avec succès (mode développement)');
+    
     return c.json({ 
       success: true, 
-      message: 'Planning saved successfully',
+      message: 'Planning sauvegardé avec succès',
       count: newSchedule.length 
     });
+    
   } catch (error) {
-    console.error('❌ Save error:', error);
-    return c.json({ error: 'Save failed: ' + error.message }, 500);
+    console.error('❌ Erreur lors de la sauvegarde du planning:', error);
+    return c.json({ error: 'Erreur lors de la sauvegarde: ' + error.message }, 500);
   }
 });
 
@@ -834,6 +848,226 @@ app.get('/', (c) => {
             let currentUser = null;
             let isAdminMode = false;
             let schedule = [];
+
+            // 🔄 NOUVEAU SYSTÈME DE GESTION DES DONNÉES ROBUSTE
+            class DataManager {
+                constructor() {
+                    this.localStorageKey = 'cercleanimo_schedule';
+                    this.apiEndpoint = '/api/schedule';
+                    this.syncInProgress = false;
+                    this.retryCount = 0;
+                    this.maxRetries = 3;
+                }
+
+                // Charger les données (localStorage en premier, puis sync avec API)
+                async loadSchedule() {
+                    try {
+                        console.log('📥 Chargement des données...');
+                        
+                        // 1. Charger depuis localStorage comme fallback rapide
+                        const localData = this.getFromLocalStorage();
+                        if (localData && localData.length > 0) {
+                            console.log('💾 Données trouvées dans localStorage:', localData.length, 'activités');
+                            schedule = localData;
+                        }
+
+                        // 2. Synchroniser avec l'API
+                        await this.syncWithAPI();
+                        
+                        return schedule;
+                    } catch (error) {
+                        console.error('❌ Erreur lors du chargement:', error);
+                        // En cas d'erreur API, utiliser les données locales
+                        const localData = this.getFromLocalStorage();
+                        if (localData) {
+                            schedule = localData;
+                            showError('Mode hors ligne - données locales utilisées', 'text-orange-600');
+                        }
+                        return schedule;
+                    }
+                }
+
+                // Ajouter une activité de manière sécurisée
+                async addActivity(activityData) {
+                    try {
+                        console.log('➕ Ajout d\\'activité:', activityData);
+                        
+                        // 1. Générer un ID unique et sûr
+                        const newActivity = {
+                            id: this.generateUniqueId(),
+                            ...activityData,
+                            created_at: new Date().toISOString(),
+                            updated_at: new Date().toISOString()
+                        };
+
+                        // 2. Optimistic Update - Ajouter localement d'abord
+                        const originalSchedule = [...schedule];
+                        schedule.push(newActivity);
+                        this.saveToLocalStorage(schedule);
+
+                        // 3. Rafraîchir l'affichage immédiatement
+                        renderCalendar();
+
+                        // 4. Synchroniser avec l'API en arrière-plan
+                        try {
+                            await this.syncWithAPI(schedule);
+                            console.log('✅ Activité synchronisée avec succès');
+                            showError('Activité "' + activityData.activity_type + '" ajoutée avec succès', 'text-green-600');
+                            return { success: true, activity: newActivity };
+                        } catch (apiError) {
+                            console.error('❌ Erreur de synchronisation, rollback:', apiError);
+                            
+                            // Rollback en cas d'erreur API
+                            schedule = originalSchedule;
+                            this.saveToLocalStorage(schedule);
+                            renderCalendar();
+                            
+                            throw new Error('Impossible de sauvegarder sur le serveur');
+                        }
+
+                    } catch (error) {
+                        console.error('❌ Erreur lors de l\'ajout:', error);
+                        throw error;
+                    }
+                }
+
+                // Sauvegarder dans localStorage
+                saveToLocalStorage(data) {
+                    try {
+                        const dataToSave = {
+                            schedule: data || schedule,
+                            timestamp: Date.now(),
+                            version: '2.0'
+                        };
+                        localStorage.setItem(this.localStorageKey, JSON.stringify(dataToSave));
+                        console.log('💾 Données sauvegardées localement');
+                    } catch (error) {
+                        console.error('❌ Erreur localStorage:', error);
+                    }
+                }
+
+                // Charger depuis localStorage
+                getFromLocalStorage() {
+                    try {
+                        const saved = localStorage.getItem(this.localStorageKey);
+                        if (saved) {
+                            const parsed = JSON.parse(saved);
+                            return parsed.schedule || [];
+                        }
+                    } catch (error) {
+                        console.error('❌ Erreur lecture localStorage:', error);
+                    }
+                    return [];
+                }
+
+                // Synchroniser avec l'API
+                async syncWithAPI(dataToSend = null) {
+                    if (this.syncInProgress) return;
+                    
+                    try {
+                        this.syncInProgress = true;
+
+                        if (dataToSend) {
+                            // Envoyer des données au serveur
+                            const response = await axios.post(this.apiEndpoint, dataToSend, {
+                                timeout: 10000,
+                                headers: { 'Content-Type': 'application/json' }
+                            });
+
+                            if (response.data.success) {
+                                console.log('📤 Données envoyées au serveur avec succès');
+                                this.saveToLocalStorage(dataToSend);
+                            } else {
+                                throw new Error('Réponse serveur négative');
+                            }
+                        } else {
+                            // Récupérer des données depuis le serveur
+                            const response = await axios.get(this.apiEndpoint, { timeout: 10000 });
+                            if (response.data && Array.isArray(response.data)) {
+                                console.log('📥 Données reçues du serveur:', response.data.length, 'activités');
+                                schedule = response.data;
+                                this.saveToLocalStorage(schedule);
+                            }
+                        }
+
+                        this.retryCount = 0; // Reset retry count on success
+                    } catch (error) {
+                        console.error('❌ Erreur de synchronisation:', error);
+                        
+                        // Retry logic
+                        if (this.retryCount < this.maxRetries) {
+                            this.retryCount++;
+                            console.log('🔄 Nouvelle tentative', this.retryCount, '/', this.maxRetries);
+                            setTimeout(() => this.syncWithAPI(dataToSend), 2000 * this.retryCount);
+                        } else {
+                            throw error;
+                        }
+                    } finally {
+                        this.syncInProgress = false;
+                    }
+                }
+
+                // Générer un ID unique
+                generateUniqueId() {
+                    const timestamp = Date.now();
+                    const random = Math.floor(Math.random() * 10000);
+                    const existingIds = schedule.map(item => item.id);
+                    
+                    let newId = timestamp + random;
+                    while (existingIds.includes(newId)) {
+                        newId = timestamp + Math.floor(Math.random() * 10000);
+                    }
+                    
+                    return newId;
+                }
+
+                // Supprimer une activité
+                async removeActivity(activityId) {
+                    try {
+                        const originalSchedule = [...schedule];
+                        schedule = schedule.filter(item => item.id !== activityId);
+                        this.saveToLocalStorage(schedule);
+                        renderCalendar();
+
+                        await this.syncWithAPI(schedule);
+                        return { success: true };
+                    } catch (error) {
+                        // Rollback
+                        schedule = originalSchedule;
+                        this.saveToLocalStorage(schedule);
+                        renderCalendar();
+                        throw error;
+                    }
+                }
+
+                // Assigner/désassigner une activité
+                async updateActivity(activityId, updates) {
+                    try {
+                        const originalSchedule = [...schedule];
+                        const activityIndex = schedule.findIndex(item => item.id === activityId);
+                        
+                        if (activityIndex === -1) {
+                            throw new Error('Activité non trouvée');
+                        }
+
+                        schedule[activityIndex] = { ...schedule[activityIndex], ...updates };
+                        this.saveToLocalStorage(schedule);
+                        renderCalendar();
+
+                        await this.syncWithAPI(schedule);
+                        return { success: true };
+                    } catch (error) {
+                        // Rollback
+                        schedule = originalSchedule;
+                        this.saveToLocalStorage(schedule);
+                        renderCalendar();
+                        throw error;
+                    }
+                }
+            }
+
+            // Créer une instance globale du DataManager
+            const dataManager = new DataManager();
             
             // Classe pour gérer l'historique des actions
             class ActionHistory {
@@ -936,18 +1170,25 @@ app.get('/', (c) => {
                 statusDiv.className = 'mt-2 text-sm text-center ' + className;
             }
 
+            // 🔄 NOUVELLE FONCTION DE CHARGEMENT AVEC DATAMANAGER
             async function loadSchedule() {
                 try {
-                    console.log('Chargement des données...');
-                    const response = await axios.get('/api/schedule');
-                    schedule = response.data;
-                    console.log('Données reçues:', schedule.length, 'éléments');
+                    console.log('🔄 Chargement des données avec DataManager...');
+                    
+                    // Utiliser le DataManager pour charger les données
+                    await dataManager.loadSchedule();
+                    
+                    console.log('📊 Données chargées:', schedule.length, 'éléments');
                     renderCalendar();
-                    console.log('Calendrier rendu avec succès');
+                    console.log('✅ Calendrier rendu avec succès');
+                    
+                    // Masquer le loading
+                    document.getElementById('loading').style.display = 'none';
+                    
                 } catch (error) {
-                    console.error('Erreur lors du chargement:', error);
+                    console.error('❌ Erreur lors du chargement:', error);
                     document.getElementById('loading').innerHTML = 
-                        '<p class="text-red-600">❌ Erreur lors du chargement des données</p>';
+                        '<p class="text-red-600">❌ Erreur lors du chargement des données. Mode hors ligne activé.</p>';
                 }
             }
 
@@ -1025,7 +1266,7 @@ app.get('/', (c) => {
 
             function toggleAdminMode() {
                 if (!currentUser) {
-                    showError("Veuillez d'abord saisir ton prénom");
+                    showError("Veuillez d\'abord saisir ton prénom");
                     return;
                 }
 
@@ -1204,7 +1445,7 @@ app.get('/', (c) => {
                         }
                     }
                     
-                    addWeekDiv.innerHTML = '<button onclick="addNewWeek()" class="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors" title="' + titleText + '">' +
+                    addWeekDiv.innerHTML = '<button onclick="addNewWeek()" class="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors" title="' + titleText.replace(/'/g, '&apos;') + '">' +
                         buttonText + '</button>' + extraInfo;
                     calendar.appendChild(addWeekDiv);
                 }
@@ -1368,7 +1609,7 @@ app.get('/', (c) => {
                     }
                 } catch (error) {
                     console.error('Erreur:', error);
-                    showError("Erreur lors de l'inscription");
+                    showError("Erreur lors de l\'inscription");
                 }
             }
 
@@ -1455,7 +1696,7 @@ app.get('/', (c) => {
                     const slot = schedule.find(s => s.id == slotId);
                     if (!slot) return;
                     
-                    if (!confirm('Retirer ' + slot.volunteer_name + ' de ce créneau ?')) return;
+                    if (!confirm('Retirer ' + slot.volunteer_name.replace(/'/g, "\\\'\"') + ' de ce créneau ?')) return;
                     
                     const oldVolunteer = slot.volunteer_name;
                     
@@ -1490,7 +1731,7 @@ app.get('/', (c) => {
                     const slot = schedule.find(s => s.id == slotId);
                     if (!slot) return;
                     
-                    const volunteerName = prompt('Changer ' + slot.volunteer_name + ' pour qui ?');
+                    const volunteerName = prompt('Changer ' + slot.volunteer_name.replace(/'/g, "\\\'\"') + ' pour qui ?');
                     
                     if (!volunteerName || !volunteerName.trim()) return;
                     
@@ -1691,7 +1932,7 @@ app.get('/', (c) => {
                     
                 } catch (error) {
                     console.error('Erreur:', error);
-                    showError("Erreur lors de l'ajout de nouvelle semaine");
+                    showError("Erreur lors de l\\'ajout de nouvelle semaine");
                 }
             }
 
@@ -1811,7 +2052,7 @@ app.get('/', (c) => {
                     
                 } catch (error) {
                     console.error('Erreur:', error);
-                    showError("Erreur lors de l'annulation");
+                    showError("Erreur lors de l\'annulation");
                 }
             }
 
@@ -1955,10 +2196,14 @@ app.get('/', (c) => {
                 }
             }
 
+            // 🎆 NOUVELLE FONCTION D'AJOUT AVEC DATAMANAGER ROBUSTE
             async function submitAddActivity(e) {
                 e.preventDefault();
                 
                 try {
+                    console.log('🚀 Démarrage de l\'ajout d\'activité...');
+                    
+                    // Récupérer et valider les données du formulaire
                     let activityType = document.getElementById('activityType').value;
                     const customTitle = document.getElementById('customTitle').value.trim();
                     const activityTime = document.getElementById('activityTime').value;
@@ -1969,7 +2214,6 @@ app.get('/', (c) => {
                     }
                     
                     const formData = {
-                        type: activityType,
                         date: document.getElementById('activityDate').value,
                         time: activityTime,
                         maxVolunteers: parseInt(document.getElementById('maxVolunteers').value),
@@ -1977,8 +2221,8 @@ app.get('/', (c) => {
                         isUrgent: document.getElementById('isUrgent').checked
                     };
 
-                    // Validation
-                    if (!formData.type || !formData.date) {
+                    // Validation stricte
+                    if (!activityType || !formData.date) {
                         showError('Veuillez remplir tous les champs obligatoires');
                         return;
                     }
@@ -1990,56 +2234,58 @@ app.get('/', (c) => {
 
                     // Calculer le day_of_week à partir de la date
                     const activityDate = new Date(formData.date);
-                    const dayOfWeek = activityDate.getDay() === 0 ? 7 : activityDate.getDay(); // Dimanche = 7, Lundi = 1
+                    const dayOfWeek = activityDate.getDay() === 0 ? 7 : activityDate.getDay();
                     
-                    // Générer un ID unique simple et sûr
-                    const baseId = Date.now();
-                    const randomSuffix = Math.floor(Math.random() * 1000);
-                    const newId = baseId + randomSuffix;
-                    
-                    // Créer la nouvelle activité
-                    const newActivity = {
-                        id: newId,
+                    // Préparer les données de l'activité (sans ID - généré par le DataManager)
+                    const activityData = {
                         date: formData.date,
                         day_of_week: dayOfWeek,
-                        activity_type: formData.type,
+                        activity_type: activityType,
                         volunteer_name: null,
                         status: formData.isUrgent ? 'urgent' : 'available',
                         max_volunteers: formData.maxVolunteers,
                         notes: formData.notes,
                         time: formData.time,
                         is_urgent_when_free: formData.isUrgent,
-                        color: getColorForActivityType(formData.type)
+                        color: getColorForActivityType(activityType)
                     };
 
-                    // Ajouter l'activité au planning
-                    schedule.push(newActivity);
+                    // Montrer un indicateur de chargement
+                    const submitBtn = e.target.querySelector('button[type="submit"]');
+                    const originalText = submitBtn.innerHTML;
+                    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Ajout...';
+                    submitBtn.disabled = true;
 
-                    // Sauvegarder sur le serveur
                     try {
-                        await axios.post('/api/schedule', schedule);
-                        console.log('✅ Activity saved to server');
-                    } catch (saveError) {
-                        console.error('⚠️ Save error:', saveError);
-                        // L'activité reste dans le planning local même si la sauvegarde échoue
+                        // 🔄 UTILISER LE NOUVEAU DATAMANAGER
+                        const result = await dataManager.addActivity(activityData);
+                        
+                        if (result.success) {
+                            // Ajouter à l'historique
+                            actionHistory.addAction({
+                                type: 'add_activity',
+                                data: { activity: result.activity, user: currentUser },
+                                undoData: { activityId: result.activity.id }
+                            });
+
+                            // Nettoyer et fermer le modal
+                            updateUndoRedoButtons();
+                            closeAddActivityModal();
+                            console.log('✅ Activité ajoutée avec succès!');
+                        }
+                        
+                    } catch (error) {
+                        console.error('❌ Erreur DataManager:', error);
+                        showError('Erreur: ' + error.message);
+                    } finally {
+                        // Restaurer le bouton
+                        submitBtn.innerHTML = originalText;
+                        submitBtn.disabled = false;
                     }
-
-                    // Ajouter à l'historique
-                    actionHistory.addAction({
-                        type: 'add_activity',
-                        data: { activity: newActivity, user: currentUser },
-                        undoData: { activityId: newActivity.id }
-                    });
-
-                    // Rafraîchir l'affichage
-                    renderCalendar();
-                    updateUndoRedoButtons();
-                    closeAddActivityModal();
-                    showError('Activité "' + formData.type + '" ajoutée pour le ' + formData.date, 'text-green-600');
                     
                 } catch (error) {
-                    console.error('Erreur:', error);
-                    showError('Erreur lors de ajout de activité');
+                    console.error('❌ Erreur générale:', error);
+                    showError('Erreur lors de l\'ajout de l\'activité');
                 }
             }
 
@@ -2242,7 +2488,7 @@ app.get('/', (c) => {
                     
                 } catch (error) {
                     console.error('Erreur:', error);
-                    showError("Erreur lors de la modification de l'activité");
+                    showError("Erreur lors de la modification de l\'activité");
                 }
             }
 
