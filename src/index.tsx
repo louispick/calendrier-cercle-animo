@@ -8,6 +8,10 @@ type Bindings = {
 
 const app = new Hono<{ Bindings: Bindings }>()
 
+// Stockage en mémoire pour le développement
+let globalSchedule: any[] = [];
+let scheduleInitialized = false;
+
 // Middleware CORS pour les API routes
 app.use('/api/*', cors())
 
@@ -71,11 +75,13 @@ app.get('/api/activity-types', async (c) => {
   }
 });
 
-// API - Récupérer le planning (prochaines 4 semaines)
-app.get('/api/schedule', async (c) => {
-  try {
-    const today = new Date();
-    const schedule = [];
+// Fonction pour initialiser le planning de base
+function initializeSchedule() {
+  if (scheduleInitialized) return globalSchedule;
+  
+  console.log('🔄 Initialisation du planning de base...');
+  const today = new Date();
+  const schedule = [];
     
     // Trouver le lundi de la semaine actuelle (pas la suivante)
     const currentMonday = new Date(today);
@@ -154,8 +160,20 @@ app.get('/api/schedule', async (c) => {
       }
     }
     
+    globalSchedule = schedule;
+    scheduleInitialized = true;
+    console.log('✅ Planning initialisé avec', schedule.length, 'éléments');
+    return globalSchedule;
+}
+
+// API - Récupérer le planning (prochaines 4 semaines)
+app.get('/api/schedule', async (c) => {
+  try {
+    const schedule = initializeSchedule();
+    console.log('📅 Envoi du planning:', schedule.length, 'éléments');
     return c.json(schedule);
   } catch (error) {
+    console.error('❌ Erreur lors de la récupération:', error);
     return c.json({ error: 'Erreur lors de la récupération du planning' }, 500);
   }
 });
@@ -224,15 +242,28 @@ app.post('/api/schedule/:id/unassign', async (c) => {
 app.post('/api/schedule', async (c) => {
   try {
     const newSchedule = await c.req.json();
-    console.log('💾 Planning save requested - count:', newSchedule.length);
+    
+    // Valider que newSchedule est un tableau
+    if (!Array.isArray(newSchedule)) {
+      throw new Error('Le planning doit être un tableau');
+    }
+    
+    // Initialiser le planning de base si pas encore fait
+    initializeSchedule();
+    
+    // Remplacer complètement le planning global
+    globalSchedule = newSchedule;
+    
+    console.log('💾 Planning sauvegardé avec succès:', globalSchedule.length, 'éléments');
+    
     return c.json({ 
       success: true, 
-      message: 'Planning saved successfully',
-      count: newSchedule.length 
+      message: 'Planning sauvegardé avec succès',
+      count: globalSchedule.length 
     });
   } catch (error) {
-    console.error('❌ Save error:', error);
-    return c.json({ error: 'Save failed: ' + error.message }, 500);
+    console.error('❌ Erreur de sauvegarde:', error);
+    return c.json({ error: 'Échec de la sauvegarde: ' + error.message }, 500);
   }
 });
 
@@ -1016,9 +1047,18 @@ app.get('/', (c) => {
                 saveUserToStorage(name);
             }
 
-            function showError(message) {
+            function showError(message, className = 'text-red-600') {
                 const errorDiv = document.getElementById('errorMessage');
-                document.getElementById('errorText').textContent = message;
+                const errorText = document.getElementById('errorText');
+                
+                errorText.textContent = message;
+                
+                // Nettoyer les anciennes classes de couleur
+                errorText.className = errorText.className.replace(/text-\w+-\d+/g, '');
+                
+                // Ajouter la nouvelle classe de couleur
+                errorText.classList.add(className);
+                
                 errorDiv.classList.remove('hidden');
                 setTimeout(() => errorDiv.classList.add('hidden'), 5000);
             }
@@ -2012,34 +2052,49 @@ app.get('/', (c) => {
                         color: getColorForActivityType(formData.type)
                     };
 
-                    // Ajouter l'activité au planning
+                    // Fermer immédiatement le modal pour éviter le blocage de l'interface
+                    closeAddActivityModal();
+                    
+                    // Montrer un message de traitement
+                    showError('Ajout de l\\'activité en cours...', 'text-blue-600');
+                    
+                    // Ajouter l'activité au planning local
                     schedule.push(newActivity);
 
-                    // Sauvegarder sur le serveur
-                    try {
-                        await axios.post('/api/schedule', schedule);
-                        console.log('✅ Activity saved to server');
-                    } catch (saveError) {
-                        console.error('⚠️ Save error:', saveError);
-                        // L'activité reste dans le planning local même si la sauvegarde échoue
-                    }
-
-                    // Ajouter à l'historique
-                    actionHistory.addAction({
-                        type: 'add_activity',
-                        data: { activity: newActivity, user: currentUser },
-                        undoData: { activityId: newActivity.id }
-                    });
-
-                    // Rafraîchir l'affichage
+                    // Rafraîchir l'affichage immédiatement
                     renderCalendar();
-                    updateUndoRedoButtons();
-                    closeAddActivityModal();
-                    showError('Activité "' + formData.type + '" ajoutée pour le ' + formData.date, 'text-green-600');
+
+                    // Sauvegarder sur le serveur en arrière-plan
+                    try {
+                        const response = await axios.post('/api/schedule', schedule);
+                        console.log('✅ Activité sauvegardée sur le serveur:', response.data);
+                        
+                        // Ajouter à l'historique seulement après succès de sauvegarde
+                        actionHistory.addAction({
+                            type: 'add_activity',
+                            data: { activity: newActivity, user: currentUser },
+                            undoData: { activityId: newActivity.id }
+                        });
+                        
+                        updateUndoRedoButtons();
+                        showError('✅ Activité "' + formData.type + '" ajoutée avec succès pour le ' + formData.date, 'text-green-600');
+                        
+                    } catch (saveError) {
+                        console.error('⚠️ Erreur de sauvegarde:', saveError);
+                        
+                        // Retirer l'activité du planning local en cas d'échec
+                        const activityIndex = schedule.findIndex(a => a.id === newActivity.id);
+                        if (activityIndex !== -1) {
+                            schedule.splice(activityIndex, 1);
+                            renderCalendar();
+                        }
+                        
+                        showError('❌ Erreur lors de la sauvegarde de l\\'activité. Veuillez réessayer.', 'text-red-600');
+                    }
                     
                 } catch (error) {
                     console.error('Erreur:', error);
-                    showError('Erreur lors de ajout de activité');
+                    showError('Erreur lors de l\\'ajout de l\\'activité');
                 }
             }
 
