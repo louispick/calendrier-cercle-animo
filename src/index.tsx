@@ -169,8 +169,10 @@ function initializeSchedule() {
 // API - Récupérer le planning (prochaines 4 semaines)
 app.get('/api/schedule', async (c) => {
   try {
-    const schedule = initializeSchedule();
-    console.log('📅 Envoi du planning:', schedule.length, 'éléments');
+    // Si le planning global existe (avec des données sauvegardées), l'utiliser
+    // Sinon, initialiser le planning de base
+    const schedule = globalSchedule.length > 0 ? globalSchedule : initializeSchedule();
+    console.log('📅 Envoi du planning:', schedule.length, 'éléments (source: ' + (globalSchedule.length > 0 ? 'sauvegardé' : 'initial') + ')');
     return c.json(schedule);
   } catch (error) {
     console.error('❌ Erreur lors de la récupération:', error);
@@ -1999,6 +2001,8 @@ app.get('/', (c) => {
                 e.preventDefault();
                 
                 try {
+                    console.log('🚀 Début ajout activité');
+                    
                     let activityType = document.getElementById('activityType').value;
                     const customTitle = document.getElementById('customTitle').value.trim();
                     const activityTime = document.getElementById('activityTime').value;
@@ -2016,6 +2020,8 @@ app.get('/', (c) => {
                         notes: document.getElementById('activityNotes').value.trim(),
                         isUrgent: document.getElementById('isUrgent').checked
                     };
+
+                    console.log('📝 Données du formulaire:', formData);
 
                     // Validation
                     if (!formData.type || !formData.date) {
@@ -2052,24 +2058,33 @@ app.get('/', (c) => {
                         color: getColorForActivityType(formData.type)
                     };
 
-                    // Fermer immédiatement le modal pour éviter le blocage de l'interface
-                    closeAddActivityModal();
+                    console.log('🎯 Nouvelle activité créée:', newActivity);
                     
-                    // Montrer un message de traitement
+                    // Montrer un message de traitement AVANT de fermer le modal
                     showError('Ajout de l\\'activité en cours...', 'text-blue-600');
                     
-                    // Ajouter l'activité au planning local
-                    schedule.push(newActivity);
-
-                    // Rafraîchir l'affichage immédiatement
-                    renderCalendar();
-
-                    // Sauvegarder sur le serveur en arrière-plan
+                    // Désactiver le bouton de soumission pour éviter les doubles clics
+                    const submitButton = document.querySelector('#addActivityForm button[type="submit"]');
+                    if (submitButton) {
+                        submitButton.disabled = true;
+                        submitButton.textContent = 'Ajout en cours...';
+                    }
+                    
                     try {
+                        // Ajouter l'activité au planning local AVANT l'envoi au serveur
+                        schedule.push(newActivity);
+                        console.log('📋 Planning local mis à jour, total:', schedule.length);
+
+                        // Sauvegarder sur le serveur IMMÉDIATEMENT
+                        console.log('💾 Envoi au serveur...');
                         const response = await axios.post('/api/schedule', schedule);
-                        console.log('✅ Activité sauvegardée sur le serveur:', response.data);
+                        console.log('✅ Réponse serveur:', response.data);
                         
-                        // Ajouter à l'historique seulement après succès de sauvegarde
+                        // Succès - Fermer le modal et rafraîchir
+                        closeAddActivityModal();
+                        renderCalendar();
+                        
+                        // Ajouter à l'historique
                         actionHistory.addAction({
                             type: 'add_activity',
                             data: { activity: newActivity, user: currentUser },
@@ -2080,21 +2095,35 @@ app.get('/', (c) => {
                         showError('✅ Activité "' + formData.type + '" ajoutée avec succès pour le ' + formData.date, 'text-green-600');
                         
                     } catch (saveError) {
-                        console.error('⚠️ Erreur de sauvegarde:', saveError);
+                        console.error('❌ Erreur de sauvegarde:', saveError);
                         
-                        // Retirer l'activité du planning local en cas d'échec
+                        // Échec - Retirer l'activité du planning local
                         const activityIndex = schedule.findIndex(a => a.id === newActivity.id);
                         if (activityIndex !== -1) {
                             schedule.splice(activityIndex, 1);
-                            renderCalendar();
+                            console.log('🗑️ Activité retirée du planning local');
                         }
                         
+                        renderCalendar();
                         showError('❌ Erreur lors de la sauvegarde de l\\'activité. Veuillez réessayer.', 'text-red-600');
+                        
+                        // Réactiver le bouton
+                        if (submitButton) {
+                            submitButton.disabled = false;
+                            submitButton.textContent = 'Ajouter';
+                        }
                     }
                     
                 } catch (error) {
-                    console.error('Erreur:', error);
-                    showError('Erreur lors de l\\'ajout de l\\'activité');
+                    console.error('💥 Erreur générale:', error);
+                    showError('Erreur lors de l\\'ajout de l\\'activité: ' + error.message);
+                    
+                    // Réactiver le bouton en cas d'erreur générale
+                    const submitButton = document.querySelector('#addActivityForm button[type="submit"]');
+                    if (submitButton) {
+                        submitButton.disabled = false;
+                        submitButton.textContent = 'Ajouter';
+                    }
                 }
             }
 
