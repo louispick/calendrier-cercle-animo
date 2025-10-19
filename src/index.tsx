@@ -1173,6 +1173,13 @@ app.get('/', (c) => {
 
                 weekGroups.forEach((week, weekIndex) => {
                     console.log('🗓️ Rendu semaine', weekIndex + 1, '/', weekGroups.length);
+                    
+                    // OPTIMISATION: Limiter le nombre d'activités par semaine
+                    if (week.length > 50) {
+                        console.warn("Semaine " + (weekIndex + 1) + " surchargée: " + week.length + " activités");
+                        week = week.slice(0, 50); // Limiter à 50 activités par semaine
+                    }
+                    
                     const weekDiv = document.createElement('div');
                     weekDiv.className = 'bg-white rounded-lg shadow-lg overflow-hidden';
                     
@@ -1248,22 +1255,41 @@ app.get('/', (c) => {
                                 cell.setAttribute('data-date', dayDate.toISOString().split('T')[0]);
                                 cell.classList.add('drop-zone');
                                 
-                                // Event listeners pour le drop
-                                cell.addEventListener('dragover', handleDragOver);
-                                cell.addEventListener('drop', handleDrop);
-                                cell.addEventListener('dragenter', handleDragEnter);
-                                cell.addEventListener('dragleave', handleDragLeave);
+                                // OPTIMISATION: Event listeners gérés par délégation dans initEventDelegation()
+                                // Au lieu de créer 4 listeners par cellule (explosion mémoire)
                             }
                             
+                            // Optimisation: Pré-filtrer les activités au lieu de filtrer à chaque cellule
                             const dayActivities = week.filter(slot => 
                                 slot.day_of_week === (dayIndex + 1) && 
                                 slot.activity_type === activityType
                             );
                             
-                            dayActivities.forEach(slot => {
-                                const slotDiv = renderSlot(slot);
-                                cell.appendChild(slotDiv);
+                            // Limiter le nombre d'activités par cellule pour éviter out of memory
+                            const maxActivitiesPerCell = 10;
+                            const limitedActivities = dayActivities.slice(0, maxActivitiesPerCell);
+                            
+                            if (dayActivities.length > maxActivitiesPerCell) {
+                                console.warn("Cellule surchargée: " + dayActivities.length + " activités (limite: " + maxActivitiesPerCell + ")");
+                            }
+                            
+                            limitedActivities.forEach(slot => {
+                                try {
+                                    const slotDiv = renderSlot(slot);
+                                    cell.appendChild(slotDiv);
+                                } catch (slotError) {
+                                    console.error('❌ Erreur renderSlot:', slotError);
+                                    // Continuer avec les autres slots
+                                }
                             });
+                            
+                            // Afficher un indicateur s'il y a trop d'activités
+                            if (dayActivities.length > maxActivitiesPerCell) {
+                                const moreDiv = document.createElement('div');
+                                moreDiv.className = 'text-xs text-gray-500 italic mt-1';
+                                moreDiv.textContent = "... et " + (dayActivities.length - maxActivitiesPerCell) + " autres";
+                                cell.appendChild(moreDiv);
+                            }
 
                             row.appendChild(cell);
                         }
@@ -1440,6 +1466,7 @@ app.get('/', (c) => {
                 // Supprimer les anciens listeners s'ils existent
                 if (calendar.dragListenerAdded) return;
                 
+                // Délégation d'événements pour éviter l'explosion de listeners
                 calendar.addEventListener('dragstart', function(e) {
                     if (e.target.classList.contains('admin-draggable')) {
                         handleDragStart(e);
@@ -1449,6 +1476,31 @@ app.get('/', (c) => {
                 calendar.addEventListener('dragend', function(e) {
                     if (e.target.classList.contains('admin-draggable')) {
                         handleDragEnd(e);
+                    }
+                });
+                
+                // NOUVEAUX: Event listeners délégués pour les drop-zones
+                calendar.addEventListener('dragover', function(e) {
+                    if (e.target.closest('.drop-zone')) {
+                        handleDragOver(e);
+                    }
+                });
+                
+                calendar.addEventListener('drop', function(e) {
+                    if (e.target.closest('.drop-zone')) {
+                        handleDrop(e);
+                    }
+                });
+                
+                calendar.addEventListener('dragenter', function(e) {
+                    if (e.target.closest('.drop-zone')) {
+                        handleDragEnter(e);
+                    }
+                });
+                
+                calendar.addEventListener('dragleave', function(e) {
+                    if (e.target.closest('.drop-zone')) {
+                        handleDragLeave(e);
                     }
                 });
                 
