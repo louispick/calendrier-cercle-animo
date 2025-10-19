@@ -243,6 +243,12 @@ app.post('/api/schedule/:id/unassign', async (c) => {
 // API - Sauvegarder le planning complet
 app.post('/api/schedule', async (c) => {
   try {
+    // Vérifier la taille de la requête avant de la traiter
+    const contentLength = c.req.header('content-length');
+    if (contentLength && parseInt(contentLength) > 1024 * 1024) { // 1MB limit
+      throw new Error('Données trop volumineuses');
+    }
+    
     const newSchedule = await c.req.json();
     
     // Valider que newSchedule est un tableau
@@ -250,11 +256,36 @@ app.post('/api/schedule', async (c) => {
       throw new Error('Le planning doit être un tableau');
     }
     
+    // Limiter le nombre d\\'éléments pour éviter les problèmes de mémoire
+    if (newSchedule.length > 1000) {
+      throw new Error("Trop d'activités dans le planning (max: 1000)");
+    }
+    
     // Initialiser le planning de base si pas encore fait
     initializeSchedule();
     
+    // Nettoyer et valider chaque élément pour optimiser la mémoire
+    const cleanSchedule = newSchedule.map((item, index) => {
+      if (!item || typeof item !== 'object') {
+        throw new Error(`Élément invalide à l'index ${index}`);
+      }
+      
+      return {
+        id: item.id || Date.now() + index,
+        date: String(item.date || ''),
+        day_of_week: Number(item.day_of_week) || 0,
+        activity_type: String(item.activity_type || ''),
+        volunteer_name: item.volunteer_name ? String(item.volunteer_name) : null,
+        status: String(item.status || 'available'),
+        max_volunteers: Number(item.max_volunteers) || 1,
+        notes: String(item.notes || ''),
+        time: String(item.time || ''),
+        is_urgent_when_free: Boolean(item.is_urgent_when_free)
+      };
+    });
+    
     // Remplacer complètement le planning global
-    globalSchedule = newSchedule;
+    globalSchedule = cleanSchedule;
     
     console.log('💾 Planning sauvegardé avec succès:', globalSchedule.length, 'éléments');
     
@@ -2095,9 +2126,28 @@ app.get('/', (c) => {
                         schedule.push(newActivity);
                         console.log('📋 Planning local mis à jour, total:', schedule.length);
 
-                        // Sauvegarder sur le serveur IMMÉDIATEMENT
+                        // Sauvegarder sur le serveur IMMÉDIATEMENT avec optimisation mémoire
                         console.log('💾 Envoi au serveur...');
-                        const response = await axios.post('/api/schedule', schedule);
+                        
+                        // Créer une copie allégée du planning pour éviter les problèmes de mémoire
+                        const lightSchedule = schedule.map(item => ({
+                            id: item.id,
+                            date: item.date,
+                            day_of_week: item.day_of_week,
+                            activity_type: item.activity_type,
+                            volunteer_name: item.volunteer_name,
+                            status: item.status,
+                            max_volunteers: item.max_volunteers || 1,
+                            notes: item.notes || "",
+                            time: item.time || "",
+                            is_urgent_when_free: item.is_urgent_when_free || false
+                        }));
+                        
+                        const response = await axios.post('/api/schedule', lightSchedule, {
+                            timeout: 10000, // 10 secondes timeout
+                            maxContentLength: Infinity,
+                            maxBodyLength: Infinity
+                        });
                         console.log('✅ Réponse serveur:', response.data);
                         
                         // Succès - Fermer le modal et rafraîchir
@@ -2125,7 +2175,16 @@ app.get('/', (c) => {
                         }
                         
                         renderCalendar();
-                        showError('❌ Erreur lors de la sauvegarde. Veuillez réessayer.', 'text-red-600');
+                        
+                        // Message d\'erreur spécifique selon le type d\'erreur
+                        let errorMessage = '❌ Erreur lors de la sauvegarde. Veuillez réessayer.';
+                        if (saveError.message && saveError.message.includes('out of memory')) {
+                            errorMessage = '❌ Serveur surchargé. Veuillez attendre quelques secondes et réessayer.';
+                        } else if (saveError.code === 'ECONNABORTED' || saveError.message.includes('timeout')) {
+                            errorMessage = '❌ Délai d\\'attente dépassé. Vérifiez votre connexion et réessayez.';
+                        }
+                        
+                        showError(errorMessage, 'text-red-600');
                         
                         // Réactiver le bouton
                         if (submitButton) {
