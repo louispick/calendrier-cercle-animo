@@ -1129,8 +1129,17 @@ app.get('/', (c) => {
 
 
 
+            // Protection contre les appels concurrents de renderCalendar
+            let isRendering = false;
+            
             function renderCalendar() {
                 console.log('renderCalendar appelé, currentUser:', currentUser);
+                
+                // Protection contre les appels multiples simultanés
+                if (isRendering) {
+                    console.log('🔄 Rendu déjà en cours, ignoré');
+                    return;
+                }
                 
                 if (!currentUser) {
                     document.getElementById('calendar').innerHTML = 
@@ -1138,13 +1147,18 @@ app.get('/', (c) => {
                     return;
                 }
 
+                isRendering = true;
                 console.log('Rendu du calendrier pour:', currentUser, '- Éléments schedule:', schedule.length);
                 
                 // PROTECTION RENFORCÉE CONTRE OUT OF MEMORY
-                if (schedule.length > 100) {
-                    console.error("🚨 TROP D'ÉLÉMENTS dans schedule:", schedule.length);
+                // Limite plus stricte en mode admin car il génère plus d'éléments DOM
+                const maxElements = isAdminMode ? 30 : 100;
+                if (schedule.length > maxElements) {
+                    console.error("🚨 TROP D'ÉLÉMENTS dans schedule:", schedule.length, "Mode admin:", isAdminMode);
+                    const modeText = isAdminMode ? " (Mode Admin: limite réduite)" : "";
                     document.getElementById('calendar').innerHTML = 
-                        '<p class="text-center text-red-600 py-8">❌ Erreur: Trop de données à afficher (' + schedule.length + ' éléments)<br>Limite: 100 activités</p>';
+                        '<p class="text-center text-red-600 py-8">❌ Erreur: Trop de données à afficher (' + schedule.length + ' éléments)<br>Limite: ' + maxElements + ' activités' + modeText + '</p>' +
+                        (isAdminMode ? '<p class="text-center text-orange-600 mt-4">💡 Conseil: Désactivez le mode admin pour voir plus d\\'activités</p>' : '');
                     return;
                 }
 
@@ -1174,10 +1188,11 @@ app.get('/', (c) => {
                 weekGroups.forEach((week, weekIndex) => {
                     console.log('🗓️ Rendu semaine', weekIndex + 1, '/', weekGroups.length);
                     
-                    // OPTIMISATION: Limiter le nombre d'activités par semaine
-                    if (week.length > 50) {
-                        console.warn("Semaine " + (weekIndex + 1) + " surchargée: " + week.length + " activités");
-                        week = week.slice(0, 50); // Limiter à 50 activités par semaine
+                    // OPTIMISATION: Limiter le nombre d'activités par semaine (plus strict en mode admin)
+                    const maxPerWeek = isAdminMode ? 20 : 50;
+                    if (week.length > maxPerWeek) {
+                        console.warn("Semaine " + (weekIndex + 1) + " surchargée: " + week.length + " activités (limite: " + maxPerWeek + ")");
+                        week = week.slice(0, maxPerWeek);
                     }
                     
                     const weekDiv = document.createElement('div');
@@ -1265,8 +1280,8 @@ app.get('/', (c) => {
                                 slot.activity_type === activityType
                             );
                             
-                            // Limiter le nombre d'activités par cellule pour éviter out of memory
-                            const maxActivitiesPerCell = 10;
+                            // Limiter le nombre d'activités par cellule (plus strict en mode admin)
+                            const maxActivitiesPerCell = isAdminMode ? 5 : 10;
                             const limitedActivities = dayActivities.slice(0, maxActivitiesPerCell);
                             
                             if (dayActivities.length > maxActivitiesPerCell) {
@@ -1342,8 +1357,13 @@ app.get('/', (c) => {
                 
                 } catch (renderError) {
                     console.error('❌ Erreur dans renderCalendar:', renderError);
-                    calendar.innerHTML = '<p class="text-center text-red-600 py-8">❌ Erreur lors du rendu du calendrier</p>';
+                    const calendar = document.getElementById('calendar');
+                    if (calendar) {
+                        calendar.innerHTML = '<p class="text-center text-red-600 py-8">❌ Erreur lors du rendu du calendrier<br><small>Essayez de désactiver le mode admin</small></p>';
+                    }
                     throw renderError; // Re-lancer pour être attrapée par le gestionnaire principal
+                } finally {
+                    isRendering = false; // Toujours réinitialiser le flag
                 }
             }
 
