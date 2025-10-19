@@ -1131,13 +1131,20 @@ app.get('/', (c) => {
 
             // Protection contre les appels concurrents de renderCalendar
             let isRendering = false;
+            let renderingTimeout;
             
             function renderCalendar() {
                 console.log('renderCalendar appelé, currentUser:', currentUser);
                 
-                // Protection contre les appels multiples simultanés
+                // Protection contre les appels multiples simultanés avec timeout de sécurité
                 if (isRendering) {
-                    console.log('🔄 Rendu déjà en cours, ignoré');
+                    console.log('🔄 Rendu déjà en cours, ignoré (timeout dans 2s)');
+                    // Timeout de sécurité pour éviter les blocages permanents
+                    clearTimeout(renderingTimeout);
+                    renderingTimeout = setTimeout(() => {
+                        console.log('⏰ Timeout de sécurité atteint, débloquage du rendu');
+                        isRendering = false;
+                    }, 2000);
                     return;
                 }
                 
@@ -1152,7 +1159,7 @@ app.get('/', (c) => {
                 
                 // PROTECTION RENFORCÉE CONTRE OUT OF MEMORY
                 // Limite plus stricte en mode admin car il génère plus d'éléments DOM
-                const maxElements = isAdminMode ? 30 : 100;
+                const maxElements = isAdminMode ? 50 : 100;
                 if (schedule.length > maxElements) {
                     console.error("🚨 TROP D'ÉLÉMENTS dans schedule:", schedule.length, "Mode admin:", isAdminMode);
                     const modeText = isAdminMode ? " (Mode Admin: limite réduite)" : "";
@@ -1364,6 +1371,7 @@ app.get('/', (c) => {
                     throw renderError; // Re-lancer pour être attrapée par le gestionnaire principal
                 } finally {
                     isRendering = false; // Toujours réinitialiser le flag
+                    clearTimeout(renderingTimeout); // Nettoyer le timeout de sécurité
                 }
             }
 
