@@ -1,299 +1,4 @@
-import { Hono } from 'hono'
-import { cors } from 'hono/cors'
-import { serveStatic } from 'hono/cloudflare-workers'
 
-type Bindings = {
-  DB: D1Database;
-}
-
-const app = new Hono<{ Bindings: Bindings }>()
-
-// Stockage en mémoire pour le développement
-let globalSchedule: any[] = [];
-let scheduleInitialized = false;
-
-// Middleware CORS pour les API routes
-app.use('/api/*', cors())
-
-// Servir les fichiers statiques
-app.use('/static/*', serveStatic({ root: './public' }))
-
-// Routes API
-
-// API - Récupérer tous les bénévoles
-app.get('/api/volunteers', async (c) => {
-  try {
-    // Toujours retourner les données mockées pour le développement local
-    // Cela évite les problèmes de migration/setup de DB
-    return c.json([
-      { id: 1, name: 'Alice', is_admin: true },
-      { id: 2, name: 'Manu', is_admin: false },
-      { id: 3, name: 'Guillaume', is_admin: false },
-      { id: 4, name: 'Eliza', is_admin: false },
-      { id: 5, name: 'Sandrine', is_admin: false },
-      { id: 6, name: 'Laet', is_admin: false },
-      { id: 7, name: 'Les Furgettes', is_admin: false }
-    ]);
-  } catch (error) {
-    return c.json({ error: 'Erreur lors de la récupération des bénévoles' }, 500);
-  }
-});
-
-// API - Ajouter un nouveau bénévole
-app.post('/api/volunteers', async (c) => {
-  try {
-    const { name } = await c.req.json();
-    
-    if (!name || name.trim().length < 2) {
-      return c.json({ error: 'Le nom doit contenir au moins 2 caractères' }, 400);
-    }
-
-    // En mode développement, simuler l'ajout
-    const newVolunteer = {
-      id: Date.now(),
-      name: name.trim(),
-      is_admin: false
-    };
-
-    return c.json({ success: true, volunteer: newVolunteer });
-  } catch (error) {
-    return c.json({ error: 'Erreur lors de ajout du bénévole' }, 500);
-  }
-});
-
-// API - Récupérer les types d\'activités
-app.get('/api/activity-types', async (c) => {
-  try {
-    // Toujours retourner les données mockées pour le développement local
-    return c.json([
-      { id: 1, name: 'Nourrissage', description: 'Nourrissage quotidien des animaux', color: '#e3f2fd' },
-      { id: 2, name: 'Légumes', description: 'Récupération et distribution de légumes', color: '#f3e5f5' },
-      { id: 3, name: 'Réunion', description: 'Réunions et événements spéciaux', color: '#fff3e0' }
-    ]);
-  } catch (error) {
-    return c.json({ error: 'Erreur lors de la récupération des activités' }, 500);
-  }
-});
-
-// Fonction pour initialiser le planning de base
-function initializeSchedule() {
-  if (scheduleInitialized) return globalSchedule;
-  
-  console.log('🔄 Initialisation du planning de base...');
-  const today = new Date();
-  const schedule = [];
-    
-    // Trouver le lundi de la semaine actuelle (pas la suivante)
-    const currentMonday = new Date(today);
-    const dayOfWeek = today.getDay();
-    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // 0 = dimanche
-    currentMonday.setDate(today.getDate() + daysToMonday);
-    
-    // Générateur de données de test amélioré
-    for (let week = 0; week < 4; week++) {
-      for (let day = 0; day < 7; day++) {
-        const date = new Date(currentMonday);
-        date.setDate(currentMonday.getDate() + (week * 7) + day);
-        const dateStr = date.toISOString().split('T')[0];
-        
-        // Nourrissage quotidien avec gestion avancée des statuts
-        const nourrissageId = week * 20 + day + 1;
-        let nourrissageStatus, nourrissageVolunteer = null;
-        
-        // Logique de test pour les statuts
-        if (day === 0 || day === 3) { // Lundi et Jeudi urgents
-          nourrissageStatus = 'urgent';
-        } else if (day === 1) { // Mardi assigné
-          nourrissageStatus = 'assigned';
-          nourrissageVolunteer = 'Alice';
-        } else if (day === 5 && week < 2) { // Samedi assigné sur 2 premières semaines
-          nourrissageStatus = 'assigned';
-          nourrissageVolunteer = 'Les Furgettes';
-        } else {
-          nourrissageStatus = 'available';
-        }
-        
-        schedule.push({
-          id: nourrissageId,
-          date: dateStr,
-          day_of_week: day + 1,
-          activity_type: 'Nourrissage',
-          volunteer_name: nourrissageVolunteer,
-          status: nourrissageStatus,
-          color: '#dc3545', // Rouge pour urgent par défaut
-          max_volunteers: 1,
-          notes: '',
-          is_urgent_when_free: day === 0 || day === 3
-        });
-        
-        // Légumes le mardi avec Clement par défaut
-        if (day === 1) {
-          schedule.push({
-            id: week * 20 + day + 10,
-            date: dateStr,
-            day_of_week: day + 1,
-            activity_type: 'Légumes',
-            volunteer_name: 'Clement',
-            status: 'assigned',
-            color: '#ffc107', // Jaune pour légumes
-            max_volunteers: 2,
-            notes: '',
-            is_urgent_when_free: false
-          });
-        }
-        
-        // Quelques réunions d'exemple
-        if (day === 4 && week === 1) { // Vendredi semaine 2
-          schedule.push({
-            id: week * 20 + day + 15,
-            date: dateStr,
-            day_of_week: day + 1,
-            activity_type: 'Réunion',
-            volunteer_name: null,
-            status: 'available',
-            color: '#6f42c1', // Violet pour réunions
-            max_volunteers: 5,
-            notes: 'Réunion mensuelle du Cercle Animo',
-            is_urgent_when_free: false
-          });
-        }
-      }
-    }
-    
-    globalSchedule = schedule;
-    scheduleInitialized = true;
-    console.log('✅ Planning initialisé avec', schedule.length, 'éléments');
-    return globalSchedule;
-}
-
-// API - Récupérer le planning (prochaines 4 semaines)
-app.get('/api/schedule', async (c) => {
-  try {
-    // Si le planning global existe (avec des données sauvegardées), l'utiliser
-    // Sinon, initialiser le planning de base
-    const schedule = globalSchedule.length > 0 ? globalSchedule : initializeSchedule();
-    console.log('📅 Envoi du planning:', schedule.length, 'éléments (source: ' + (globalSchedule.length > 0 ? 'sauvegardé' : 'initial') + ')');
-    return c.json(schedule);
-  } catch (error) {
-    console.error('❌ Erreur lors de la récupération:', error);
-    return c.json({ error: 'Erreur lors de la récupération du planning' }, 500);
-  }
-});
-
-// API - S'inscrire sur un créneau
-app.post('/api/schedule/:id/assign', async (c) => {
-  try {
-    const { env } = c;
-    const slotId = c.req.param('id');
-    const body = await c.req.json();
-    const volunteer_name = body.volunteer_name;
-    
-    console.log('Assign API called:', { slotId, volunteer_name, hasDB: !!(env && env.DB) });
-
-    // Mode développement - toujours simuler (pas de vraie DB configurée)
-    console.log('Mode développement - simulation assign');
-    return c.json({ success: true, message: 'Inscription réussie (dev)' });
-    
-    const result = await env.DB.prepare(`
-      UPDATE time_slots 
-      SET volunteer_id = ?, status = 'assigned', updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).bind(volunteer_name, slotId).run();
-    
-    if (result.changes > 0) {
-      return c.json({ success: true, message: 'Inscription réussie' });
-    } else {
-      return c.json({ error: 'Créneau non trouvé' }, 404);
-    }
-  } catch (error) {
-    console.error('Erreur API assign:', error);
-    return c.json({ error: "Erreur lors de l\'inscription: " + error.message }, 500);
-  }
-});
-
-// API - Se désinscrire d'un créneau
-app.post('/api/schedule/:id/unassign', async (c) => {
-  try {
-    const { env } = c;
-    const slotId = c.req.param('id');
-    
-    console.log('Unassign API called:', { slotId, hasDB: !!(env && env.DB) });
-
-    // Mode développement - toujours simuler (pas de vraie DB configurée)
-    console.log('Mode développement - simulation unassign');
-    return c.json({ success: true, message: 'Désinscription réussie (dev)' });
-    
-    const result = await env.DB.prepare(`
-      UPDATE time_slots 
-      SET volunteer_id = NULL, status = 'available', updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).bind(slotId).run();
-    
-    if (result.changes > 0) {
-      return c.json({ success: true, message: 'Désinscription réussie' });
-    } else {
-      return c.json({ error: 'Créneau non trouvé' }, 404);
-    }
-  } catch (error) {
-    console.error('Erreur API unassign:', error);
-    return c.json({ error: 'Erreur lors de la désinscription: ' + error.message }, 500);
-  }
-});
-
-// API - Sauvegarder le planning complet
-app.post('/api/schedule', async (c) => {
-  try {
-    const newSchedule = await c.req.json();
-    
-    // Valider que newSchedule est un tableau
-    if (!Array.isArray(newSchedule)) {
-      throw new Error('Le planning doit être un tableau');
-    }
-    
-    // Initialiser le planning de base si pas encore fait
-    initializeSchedule();
-    
-    // Remplacer complètement le planning global
-    globalSchedule = newSchedule;
-    
-    console.log('💾 Planning sauvegardé avec succès:', globalSchedule.length, 'éléments');
-    
-    return c.json({ 
-      success: true, 
-      message: 'Planning sauvegardé avec succès',
-      count: globalSchedule.length 
-    });
-  } catch (error) {
-    console.error('❌ Erreur de sauvegarde:', error);
-    return c.json({ error: 'Échec de la sauvegarde: ' + error.message }, 500);
-  }
-});
-
-// Test route
-app.get('/test', (c) => {
-  return c.html(`
-    <!DOCTYPE html>
-    <html>
-    <head><title>Test Apostrophe Fix</title></head>
-    <body>
-      <h1>Test de l'apostrophe</h1>
-      <script>
-        console.log('✅ JavaScript chargé avec succès');
-        function testError() {
-          // Test avec apostrophe échappée
-          console.log('Test apostrophe dans inscription');
-          alert('Apostrophe fonctionne !');
-        }
-        testError();
-      </script>
-    </body>
-    </html>
-  `)
-});
-
-// Route principale - Application web
-app.get('/', (c) => {
-  return c.html(`
     <!DOCTYPE html>
     <html lang="fr">
     <head>
@@ -736,7 +441,7 @@ app.get('/', (c) => {
                         <input type="hidden" id="modifyActivityId">
                         <div class="mb-4">
                             <label for="modifyActivityType" class="block text-sm font-medium text-gray-700 mb-2">
-                                Type d\'activité
+                                Type d'activité
                             </label>
                             <select id="modifyActivityType" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" required>
                                 <option value="">Sélectionner un type</option>
@@ -747,7 +452,7 @@ app.get('/', (c) => {
                         </div>
                         <div class="mb-4" id="modifyCustomActivityTitle" style="display: none;">
                             <label for="modifyCustomTitle" class="block text-sm font-medium text-gray-700 mb-2">
-                                Titre de l\'activité
+                                Titre de l'activité
                             </label>
                             <input type="text" id="modifyCustomTitle" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Nom de votre activité">
                         </div>
@@ -1056,7 +761,7 @@ app.get('/', (c) => {
                 errorText.textContent = message;
                 
                 // Nettoyer les anciennes classes de couleur
-                errorText.className = errorText.className.replace(/text-\w+-\d+/g, '');
+                errorText.className = errorText.className.replace(/text-w+-d+/g, '');
                 
                 // Ajouter la nouvelle classe de couleur
                 errorText.classList.add(className);
@@ -1067,7 +772,7 @@ app.get('/', (c) => {
 
             function toggleAdminMode() {
                 if (!currentUser) {
-                    showError(\"Veuillez d\\'abord saisir ton prénom\");
+                    showError("Veuillez d\'abord saisir ton prénom");
                     return;
                 }
 
@@ -1111,7 +816,7 @@ app.get('/', (c) => {
                 
                 // PROTECTION CONTRE OUT OF MEMORY
                 if (schedule.length > 1000) {
-                    console.error("🚨 TROP D'ÉLÉMENTS dans schedule:", schedule.length);
+                    console.error('🚨 TROP D'ÉLÉMENTS dans schedule:', schedule.length);
                     document.getElementById('calendar').innerHTML = 
                         '<p class="text-center text-red-600 py-8">❌ Erreur: Trop de données à afficher (' + schedule.length + ' éléments)</p>';
                     return;
@@ -1317,7 +1022,7 @@ app.get('/', (c) => {
                 let volunteersDisplay = '';
                 if (slot.volunteer_name) {
                     // Échapper les caractères spéciaux pour éviter les problèmes JavaScript
-                    const escapedName = slot.volunteer_name.replace(/'/g, '\\u0027').replace(/"/g, '\\u0022');
+                    const escapedName = slot.volunteer_name.replace(/'/g, '\u0027').replace(/"/g, '\u0022');
                     volunteersDisplay = '👤 ' + escapedName;
                 } else {
                     volunteersDisplay = '⭕ Libre';
@@ -1326,7 +1031,7 @@ app.get('/', (c) => {
                 let actionButton = '';
                 if (currentUser) {
                     if (isAdminMode) {
-                        // Mode admin : boutons pour assigner/désassigner n\'importe qui
+                        // Mode admin : boutons pour assigner/désassigner n'importe qui
                         const urgentButtonText = (slot.status === 'urgent' || slot.is_urgent_when_free) ? 'Normal' : 'Urgent';
                         const urgentButtonClass = (slot.status === 'urgent' || slot.is_urgent_when_free) ? 'bg-gray-500 hover:bg-gray-600' : 'bg-yellow-500 hover:bg-yellow-600';
                         
@@ -1430,12 +1135,12 @@ app.get('/', (c) => {
                     }
                 } catch (error) {
                     console.error('Erreur:', error);
-                    showError(\"Erreur lors de l\\\'inscription\");
+                    showError("Erreur lors de l\'inscription");
                 }
             }
 
             async function unassignSlot(slotId) {
-                if (!confirm("Êtes-vous sûr de vouloir vous désinscrire ?")) return;
+                if (!confirm('Êtes-vous sûr de vouloir vous désinscrire ?')) return;
 
                 try {
                     const response = await axios.post('/api/schedule/' + slotId + '/unassign', {
@@ -1517,7 +1222,7 @@ app.get('/', (c) => {
                     const slot = schedule.find(s => s.id == slotId);
                     if (!slot) return;
                     
-                    if (!confirm("Retirer " + slot.volunteer_name + " de ce créneau ?")) return;
+                    if (!confirm('Retirer \' + slot.volunteer_name + \' de ce créneau ?')) return;
                     
                     const oldVolunteer = slot.volunteer_name;
                     
@@ -1552,7 +1257,7 @@ app.get('/', (c) => {
                     const slot = schedule.find(s => s.id == slotId);
                     if (!slot) return;
                     
-                    const volunteerName = prompt("Changer " + slot.volunteer_name + " pour qui ?");
+                    const volunteerName = prompt('Changer ' + slot.volunteer_name + ' pour qui ?');
                     
                     if (!volunteerName || !volunteerName.trim()) return;
                     
@@ -1753,7 +1458,7 @@ app.get('/', (c) => {
                     
                 } catch (error) {
                     console.error('Erreur:', error);
-                    showError(\"Erreur lors de l\\'ajout de nouvelle semaine\");
+                    showError("Erreur lors de l\'ajout de nouvelle semaine");
                 }
             }
 
@@ -1781,7 +1486,7 @@ app.get('/', (c) => {
                     const weekInfo = 'du ' + weekStartDate.getDate() + '/' + (weekStartDate.getMonth() + 1) + 
                                    ' au ' + weekEndDate.getDate() + '/' + (weekEndDate.getMonth() + 1);
                     
-                    if (!confirm("Supprimer définitivement la semaine " + (weekIndex + 1) + " (" + weekInfo + ") ?\\n\\nToutes les activités de cette semaine seront supprimées.")) {
+                    if (!confirm('Supprimer définitivement la semaine ' + (weekIndex + 1) + ' (' + weekInfo + ') ?\n\nToutes les activités de cette semaine seront supprimées.')) {
                         return;
                     }
                     
@@ -1845,13 +1550,13 @@ app.get('/', (c) => {
                         renderCalendar();
                         showError('Semaine restaurée (annulation suppression)', 'text-orange-600');
                     } else if (action.type === 'add_activity' && action.undoData) {
-                        // Supprimer l\'activité qui avait été ajoutée
+                        // Supprimer l'activité qui avait été ajoutée
                         const activityId = action.undoData.activityId;
                         schedule = schedule.filter(activity => activity.id !== activityId);
                         renderCalendar();
                         showError('Activité supprimée (annulation)', 'text-orange-600');
                     } else if (action.type === 'modify_activity' && action.undoData) {
-                        // Restaurer l'ancienne version de l\'activité
+                        // Restaurer l'ancienne version de l'activité
                         const slotId = action.undoData.slotId;
                         const oldData = action.undoData.oldData;
                         const slotIndex = schedule.findIndex(s => s.id === slotId);
@@ -1873,7 +1578,7 @@ app.get('/', (c) => {
                     
                 } catch (error) {
                     console.error('Erreur:', error);
-                    showError(\"Erreur lors de l\\'annulation\");
+                    showError("Erreur lors de l\'annulation");
                 }
             }
 
@@ -1896,13 +1601,13 @@ app.get('/', (c) => {
                         renderCalendar();
                         showError('Semaine supprimée (refait)', 'text-red-600');
                     } else if (action.type === 'add_activity' && action.data) {
-                        // Refaire l'ajout d\'activité
+                        // Refaire l'ajout d'activité
                         const activityToRestore = action.data.activity;
                         schedule.push(activityToRestore);
                         renderCalendar();
                         showError('Activité restaurée (refait)', 'text-green-600');
                     } else if (action.type === 'modify_activity' && action.data) {
-                        // Refaire la modification d\'activité
+                        // Refaire la modification d'activité
                         const slotId = action.data.slotId;
                         const newData = action.data.newData;
                         const slotIndex = schedule.findIndex(s => s.id === slotId);
@@ -2091,7 +1796,7 @@ app.get('/', (c) => {
                     }
                     
                     try {
-                        // Ajouter l\'activité au planning local AVANT l'envoi au serveur
+                        // Ajouter l'activité au planning local AVANT l'envoi au serveur
                         schedule.push(newActivity);
                         console.log('📋 Planning local mis à jour, total:', schedule.length);
 
@@ -2117,7 +1822,7 @@ app.get('/', (c) => {
                     } catch (saveError) {
                         console.error('❌ Erreur de sauvegarde:', saveError);
                         
-                        // Échec - Retirer l\'activité du planning local
+                        // Échec - Retirer l'activité du planning local
                         const activityIndex = schedule.findIndex(a => a.id === newActivity.id);
                         if (activityIndex !== -1) {
                             schedule.splice(activityIndex, 1);
@@ -2207,7 +1912,7 @@ app.get('/', (c) => {
                 // Pré-remplir le formulaire avec les données actuelles
                 document.getElementById('modifyActivityId').value = slotId;
                 
-                // Gérer le type d\'activité
+                // Gérer le type d'activité
                 const activityTypeSelect = document.getElementById('modifyActivityType');
                 const customTitleDiv = document.getElementById('modifyCustomActivityTitle');
                 const customTitleInput = document.getElementById('modifyCustomTitle');
@@ -2290,7 +1995,7 @@ app.get('/', (c) => {
                         return;
                     }
 
-                    // Trouver l\'activité à modifier
+                    // Trouver l'activité à modifier
                     const slotIndex = schedule.findIndex(s => s.id === slotId);
                     if (slotIndex === -1) {
                         showError('Activité non trouvée');
@@ -2304,7 +2009,7 @@ app.get('/', (c) => {
                     const activityDate = new Date(formData.date);
                     const dayOfWeek = activityDate.getDay() === 0 ? 7 : activityDate.getDay(); // Dimanche = 7, Lundi = 1
                     
-                    // Mettre à jour l\'activité
+                    // Mettre à jour l'activité
                     schedule[slotIndex] = {
                         ...schedule[slotIndex],
                         activity_type: formData.type,
@@ -2670,7 +2375,7 @@ app.get('/', (c) => {
                 const targetDateObj = new Date(targetDate);
                 const newDayOfWeek = (targetDateObj.getDay() + 6) % 7 + 1;
                 
-                // Mettre à jour l\'activité
+                // Mettre à jour l'activité
                 slot.date = targetDate;
                 slot.day_of_week = newDayOfWeek;
                 slot.activity_type = targetActivityType;
@@ -2882,7 +2587,4 @@ app.get('/', (c) => {
         </script>
     </body>
     </html>
-  `)
-});
-
-export default app
+  <script>import("/@vite/client")</script>
