@@ -1140,20 +1140,27 @@ app.get('/', (c) => {
 
                 console.log('Rendu du calendrier pour:', currentUser, '- Éléments schedule:', schedule.length);
                 
-                // PROTECTION CONTRE OUT OF MEMORY
-                if (schedule.length > 1000) {
+                // PROTECTION RENFORCÉE CONTRE OUT OF MEMORY
+                if (schedule.length > 100) {
                     console.error("🚨 TROP D'ÉLÉMENTS dans schedule:", schedule.length);
                     document.getElementById('calendar').innerHTML = 
-                        '<p class="text-center text-red-600 py-8">❌ Erreur: Trop de données à afficher (' + schedule.length + ' éléments)</p>';
+                        '<p class="text-center text-red-600 py-8">❌ Erreur: Trop de données à afficher (' + schedule.length + ' éléments)<br>Limite: 100 activités</p>';
                     return;
                 }
 
                 const calendar = document.getElementById('calendar');
-                calendar.innerHTML = '';
+                if (!calendar) {
+                    console.error('❌ Élément calendar non trouvé');
+                    return;
+                }
+                
+                // Protection contre les erreurs de rendu
+                try {
+                    calendar.innerHTML = '';
 
-                console.log('🔄 Début groupByWeeks...');
-                const weekGroups = groupByWeeks(schedule);
-                console.log('✅ groupByWeeks terminé - Semaines:', weekGroups.length);
+                    console.log('🔄 Début groupByWeeks...');
+                    const weekGroups = groupByWeeks(schedule);
+                    console.log('✅ groupByWeeks terminé - Semaines:', weekGroups.length);
                 
                 const today = new Date().toISOString().split('T')[0];
 
@@ -1305,6 +1312,12 @@ app.get('/', (c) => {
                 // Initialiser la délégation d'événements pour optimiser les performances
                 if (isAdminMode) {
                     initEventDelegation();
+                }
+                
+                } catch (renderError) {
+                    console.error('❌ Erreur dans renderCalendar:', renderError);
+                    calendar.innerHTML = '<p class="text-center text-red-600 py-8">❌ Erreur lors du rendu du calendrier</p>';
+                    throw renderError; // Re-lancer pour être attrapée par le gestionnaire principal
                 }
             }
 
@@ -2150,9 +2163,8 @@ app.get('/', (c) => {
                         });
                         console.log('✅ Réponse serveur:', response.data);
                         
-                        // Succès - Fermer le modal et rafraîchir
+                        // Succès - Fermer le modal 
                         closeAddActivityModal();
-                        renderCalendar();
                         
                         // Ajouter à l'historique
                         actionHistory.addAction({
@@ -2174,13 +2186,13 @@ app.get('/', (c) => {
                             console.log('🗑️ Activité retirée du planning local');
                         }
                         
-                        renderCalendar();
-                        
                         // Message d\'erreur spécifique selon le type d\'erreur
                         let errorMessage = '❌ Erreur lors de la sauvegarde. Veuillez réessayer.';
-                        if (saveError.message && saveError.message.includes('out of memory')) {
+                        const errorMsg = saveError?.message || saveError?.toString() || '';
+                        
+                        if (errorMsg.includes('out of memory')) {
                             errorMessage = '❌ Serveur surchargé. Veuillez attendre quelques secondes et réessayer.';
-                        } else if (saveError.code === 'ECONNABORTED' || saveError.message.includes('timeout')) {
+                        } else if (saveError?.code === 'ECONNABORTED' || errorMsg.includes('timeout')) {
                             errorMessage = '❌ Délai d\\'attente dépassé. Vérifiez votre connexion et réessayez.';
                         }
                         
@@ -2195,13 +2207,26 @@ app.get('/', (c) => {
                     
                 } catch (error) {
                     console.error('💥 Erreur générale:', error);
-                    showError('Erreur ajout: ' + error.message);
+                    showError('Erreur ajout: ' + (error?.message || error));
                     
                     // Réactiver le bouton en cas d'erreur générale
                     const submitButton = document.querySelector('#addActivityForm button[type="submit"]');
                     if (submitButton) {
                         submitButton.disabled = false;
                         submitButton.textContent = 'Ajouter';
+                    }
+                }
+                
+                // Rafraîchir le calendrier après l'ajout (succès ou échec) avec protection mémoire
+                try {
+                    console.log('🔄 Rafraîchissement du calendrier...');
+                    renderCalendar();
+                } catch (renderError) {
+                    console.error('❌ Erreur de rendu calendrier:', renderError);
+                    if (renderError.message && renderError.message.includes('out of memory')) {
+                        showError('❌ Trop de données à afficher. Rechargez la page.', 'text-red-600');
+                    } else {
+                        showError('❌ Erreur d\\'affichage du calendrier', 'text-red-600');
                     }
                 }
             }
