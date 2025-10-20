@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>❤️ Calendrier du Cercle Animô ❤️</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+      .status-urgent { background-color: #2563eb; color: white; border: 2px solid #1d4ed8; font-weight: 600; position: relative; }
+      .status-assigned { background-color: #1e40af; color: white; border: 2px solid #1e3a8a; }
+      .status-available { background-color: #16a34a; color: white; border: 2px solid #15803d; }
+      .urgent-badge { position: absolute; top: -8px; right: -8px; width: 24px; height: 24px; background-color: #fbbf24; color: #1f2937; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.75rem; line-height: 1; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+      .activity-legumes { background-color: #f59e0b; color: white; border: 2px solid #d97706; }
+      .activity-reunion { background-color: #8b5cf6; color: white; border: 2px solid #7c3aed; }
+      .activity-general { background-color: #60a5fa; color: white; border: 2px solid #3b82f6; }
+      .slot-card { padding: 0.5rem; margin-bottom: 0.25rem; border-radius: 0.375rem; font-size: 0.75rem; font-weight: 600; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); cursor: pointer; position: relative; }
+      .slot-card.draggable { cursor: grab; }
+      .slot-card.dragging { opacity: 0.5; }
+      .drop-zone.drag-over { background-color: #bfdbfe; border: 2px dashed #60a5fa; }
+      .today-highlight { background-color: #fffbeb; }
+      #adminPanel { background-color: #f3f4f6; padding: 1rem; border-radius: 0.5rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); margin-bottom: 1.5rem; }
+      #adminPanel h2 { font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem; color: #1f2937; }
+      #adminPanel label { display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.25rem; }
+      #adminPanel input[type="text"], #adminPanel input[type="number"], #adminPanel input[type="date"], #adminPanel input[type="color"], #adminPanel select { margin-top: 0.25rem; display: block; width: 100%; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 0.375rem; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
+      #adminPanel button { padding: 0.5rem 1rem; border: 1px solid transparent; border-radius: 0.375rem; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); font-size: 0.875rem; font-weight: 500; color: white; background-color: #4f46e5; cursor: pointer; }
+      #adminPanel button:hover { background-color: #4338ca; }
+      #adminPanel .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+      #messageContainer { position: fixed; bottom: 1rem; right: 1rem; z-index: 50; }
+      .message-box { padding: 0.75rem; border-radius: 0.5rem; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); margin-bottom: 0.5rem; color: white; }
+      .message-box.success { background-color: #10b981; }
+      .message-box.error { background-color: #ef4444; }
+      .calendar-container { display: flex; flex-direction: column; gap: 2rem; }
+      .week-table { border-collapse: collapse; width: 100%; }
+      .week-table thead th { background-color: #1f2937; color: white; padding: 1rem; text-align: left; }
+      .week-table tbody td { padding: 0.75rem; border: 1px solid #e5e7eb; vertical-align: top; min-height: 100px; }
+      .week-table tbody tr:hover { background-color: #f9fafb; }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans leading-normal tracking-normal">
+    <div class="container mx-auto p-4 lg:p-8">
+        <h1 class="text-4xl lg:text-5xl font-extrabold text-center text-gray-900 mb-8">
+            ❤️ Calendrier du Cercle Animô ❤️
+        </h1>
+
+        <div id="messageContainer"></div>
+
+        <div class="bg-white p-6 rounded-lg shadow-md mb-6 flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0 md:space-x-4">
+            <div class="flex-grow w-full md:w-auto">
+                <label for="volunteerName" class="block text-sm font-medium text-gray-700">Ton prénom:</label>
+                <input type="text" id="volunteerName" placeholder="Ex: Alice" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+            </div>
+            <div class="flex items-center space-x-4">
+                <button id="toggleAdminBtn" class="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors">Mode Admin</button>
+                <button id="saveScheduleBtn" class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">Sauvegarder</button>
+            </div>
+        </div>
+
+        <div id="adminPanel" class="hidden">
+            <h2>Panneau d'Administration</h2>
+            <div class="grid">
+                <div>
+                    <h3 class="text-lg font-semibold mb-2">Ajouter un Bénévole</h3>
+                    <input type="text" id="newVolunteerName" placeholder="Nom du bénévole" class="mb-2">
+                    <button onclick="addVolunteer()">Ajouter Bénévole</button>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold mb-2">Ajouter une Activité</h3>
+                    <div class="flex space-x-2 mb-2">
+                        <input type="text" id="newActivityName" placeholder="Nom de l'activité" class="flex-grow">
+                        <input type="color" id="newActivityColor" value="#60a5fa" class="w-10 h-10 p-1 border rounded-md">
+                    </div>
+                    <button onclick="addActivityType()">Ajouter Type Activité</button>
+                </div>
+            </div>
+            <h3 class="text-lg font-semibold mt-4 mb-2">Ajouter une Activité au Planning</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label for="addActivityTypeSelect">Type d'Activité:</label>
+                    <select id="addActivityTypeSelect"></select>
+                </div>
+                <div>
+                    <label for="addActivityDate">Date:</label>
+                    <input type="date" id="addActivityDate">
+                </div>
+                <div>
+                    <label for="addActivityVolunteer">Bénévole (optionnel):</label>
+                    <select id="addActivityVolunteer"></select>
+                </div>
+                <div>
+                    <label for="addActivityMaxVolunteers">Max Bénévoles:</label>
+                    <input type="number" id="addActivityMaxVolunteers" value="1" min="1">
+                </div>
+                <div>
+                    <label for="addActivityNotes">Notes:</label>
+                    <input type="text" id="addActivityNotes" placeholder="Notes additionnelles">
+                </div>
+                <div class="flex items-end">
+                    <button onclick="addActivityToSchedule()" class="w-full">Ajouter au Planning</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="calendar" class="calendar-container"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
+
