@@ -2322,7 +2322,7 @@ app.get('/', (c) => {
 
                     // ÉTAPE 3: OPTIMISATION MÉMOIRE - Fermer le modal IMMÉDIATEMENT (comme Manus)
                     closeAddActivityModal();
-                    showError('Ajout de l\\'activit\u00e9 en cours...', 'text-blue-600');
+                    showError('Ajout de l\\'activité en cours...', 'text-blue-600');
 
                     // ÉTAPE 4: Création de l'activité (optimisée)
                     const activityDate = new Date(formData.date);
