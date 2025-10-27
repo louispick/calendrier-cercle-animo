@@ -1138,10 +1138,58 @@ app.get('/', (c) => {
                     // Corps du tableau avec les activités
                     const tbody = document.createElement('tbody');
                     
-                    // Organiser les activités par type
-                    const activityTypesInWeek = [...new Set(week.map(slot => slot.activity_type))];
+                    // Organiser les activités par jour pour chaque ligne
+                    // Ligne 1 : Nourrissages
+                    // Lignes 2+ : Autres activités (autant de lignes que nécessaire)
                     
-                    activityTypesInWeek.forEach((activityType, typeIndex) => {
+                    // Créer la ligne des nourrissages (toujours en premier)
+                    const nourrissageRow = document.createElement('tr');
+                    nourrissageRow.className = 'border-b border-gray-200 hover:bg-gray-50';
+                    
+                    for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
+                        const cell = document.createElement('td');
+                        cell.className = 'p-2 lg:p-3 border-r border-gray-200 last:border-r-0 align-top';
+                        
+                        const dayDate = new Date(currentWeekStart);
+                        dayDate.setDate(currentWeekStart.getDate() + dayIndex);
+                        const isToday = dayDate.toISOString().split('T')[0] === today;
+                        
+                        if (isToday) {
+                            cell.classList.add('today-highlight');
+                        }
+                        
+                        // Trouver le nourrissage pour ce jour
+                        const nourrissage = week.find(slot => 
+                            slot.day_of_week === (dayIndex + 1) && 
+                            slot.activity_type === 'Nourrissage'
+                        );
+                        
+                        if (nourrissage) {
+                            const slotDiv = renderSlot(nourrissage);
+                            cell.appendChild(slotDiv);
+                        }
+                        
+                        nourrissageRow.appendChild(cell);
+                    }
+                    tbody.appendChild(nourrissageRow);
+                    
+                    // Organiser les autres activités par jour
+                    const otherActivitiesByDay = {};
+                    for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
+                        otherActivitiesByDay[dayIndex] = week.filter(slot => 
+                            slot.day_of_week === (dayIndex + 1) && 
+                            slot.activity_type !== 'Nourrissage'
+                        );
+                    }
+                    
+                    // Trouver le nombre maximum d'activités non-nourrissage sur un même jour
+                    const maxActivitiesPerDay = Math.max(
+                        0,
+                        ...Object.values(otherActivitiesByDay).map(acts => acts.length)
+                    );
+                    
+                    // Créer autant de lignes que nécessaire pour les autres activités
+                    for (let rowIndex = 0; rowIndex < maxActivitiesPerDay; rowIndex++) {
                         const row = document.createElement('tr');
                         row.className = 'border-b border-gray-200 hover:bg-gray-50';
                         
@@ -1160,7 +1208,7 @@ app.get('/', (c) => {
                             // Rendre la cellule capable d'accepter les drops si en mode admin
                             if (isAdminMode) {
                                 cell.setAttribute('data-day-index', dayIndex);
-                                cell.setAttribute('data-activity-type', activityType);
+                                cell.setAttribute('data-row-index', rowIndex + 1); // +1 car ligne 0 = nourrissage
                                 cell.setAttribute('data-date', dayDate.toISOString().split('T')[0]);
                                 cell.classList.add('drop-zone');
                                 
@@ -1171,21 +1219,18 @@ app.get('/', (c) => {
                                 cell.addEventListener('dragleave', handleDragLeave);
                             }
                             
-                            const dayActivities = week.filter(slot => 
-                                slot.day_of_week === (dayIndex + 1) && 
-                                slot.activity_type === activityType
-                            );
-                            
-                            dayActivities.forEach(slot => {
-                                const slotDiv = renderSlot(slot);
+                            // Afficher l'activité correspondant à cette ligne
+                            const activities = otherActivitiesByDay[dayIndex];
+                            if (activities && activities[rowIndex]) {
+                                const slotDiv = renderSlot(activities[rowIndex]);
                                 cell.appendChild(slotDiv);
-                            });
-
+                            }
+                            
                             row.appendChild(cell);
                         }
                         
                         tbody.appendChild(row);
-                    });
+                    }
 
                     table.appendChild(tbody);
                     tableContainer.appendChild(table);
@@ -1268,13 +1313,28 @@ app.get('/', (c) => {
                     // Les event listeners sont maintenant gérés par délégation dans initEventDelegation()
                 }
 
+                // Gérer les bénévoles : tableau pour multi-bénévoles, ou ancien format volunteer_name
+                let volunteers = [];
+                if (slot.volunteers && Array.isArray(slot.volunteers)) {
+                    volunteers = slot.volunteers;
+                } else if (slot.volunteer_name) {
+                    volunteers = [slot.volunteer_name];
+                }
+                
+                const maxVolunteers = slot.max_volunteers || 15;
+                const isFull = volunteers.length >= maxVolunteers;
+                const isUserRegistered = volunteers.includes(currentUser);
+                
+                // Affichage des bénévoles
                 let volunteersDisplay = '';
-                if (slot.volunteer_name) {
-                    // Échapper les caractères spéciaux pour éviter les problèmes JavaScript
-                    const escapedName = slot.volunteer_name.replace(/'/g, "\\'").replace(/"/g, '\\"');
-                    volunteersDisplay = '👤 ' + escapedName;
+                if (volunteers.length > 0) {
+                    if (volunteers.length === 1) {
+                        volunteersDisplay = '👤 ' + volunteers[0];
+                    } else {
+                        volunteersDisplay = '👥 ' + volunteers.length + '/' + maxVolunteers + ' : ' + volunteers.join(', ');
+                    }
                 } else {
-                    volunteersDisplay = '⭕ Libre';
+                    volunteersDisplay = '⭕ Libre (0/' + maxVolunteers + ')';
                 }
 
                 let actionButton = '';
@@ -1290,10 +1350,10 @@ app.get('/', (c) => {
                             deleteButton = '<button onclick="deleteActivity(' + slot.id + ')" class="w-full px-2 py-1 bg-red-800 text-white text-xs rounded hover:bg-red-900">Supprimer</button>';
                         }
                         
-                        if (slot.volunteer_name) {
+                        if (volunteers.length > 0) {
                             actionButton = '<div class="mt-1 space-y-1">' +
+                                '<button onclick="adminAssignSlot(' + slot.id + ')" class="w-full px-2 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600">Ajouter</button>' +
                                 '<button onclick="adminUnassignSlot(' + slot.id + ')" class="w-full px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600">Retirer</button>' +
-                                '<button onclick="adminChangeSlot(' + slot.id + ')" class="w-full px-2 py-1 bg-orange-500 text-white text-xs rounded hover:bg-orange-600">Changer</button>' +
                                 (modifyButton ? modifyButton : '') +
                                 (deleteButton ? deleteButton : '') +
                                 '</div>';
@@ -1306,10 +1366,22 @@ app.get('/', (c) => {
                         }
                     } else {
                         // Mode normal : boutons pour l'utilisateur actuel
-                        if (slot.status === 'available' || slot.status === 'urgent' || !slot.volunteer_name) {
-                            actionButton = '<button onclick="assignSlot(' + slot.id + ')" class="mt-1 px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 w-full">Inscription</button>';
-                        } else if (slot.volunteer_name === currentUser) {
-                            actionButton = '<button onclick="unassignSlot(' + slot.id + ')" class="mt-1 px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 w-full">Desinscription</button>';
+                        // Pour les nourrissages : système classique (1 personne max)
+                        if (slot.activity_type === 'Nourrissage') {
+                            if (!volunteers.length || volunteers.length === 0) {
+                                actionButton = '<button onclick="assignSlot(' + slot.id + ')" class="mt-1 px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 w-full">Inscription</button>';
+                            } else if (isUserRegistered) {
+                                actionButton = '<button onclick="unassignSlot(' + slot.id + ')" class="mt-1 px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 w-full">Désinscription</button>';
+                            }
+                        } else {
+                            // Pour les autres activités : multi-bénévoles
+                            if (isUserRegistered) {
+                                actionButton = '<button onclick="unassignSlot(' + slot.id + ')" class="mt-1 px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 w-full">Désinscription</button>';
+                            } else if (!isFull) {
+                                actionButton = '<button onclick="assignSlot(' + slot.id + ')" class="mt-1 px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 w-full">Inscription</button>';
+                            } else {
+                                actionButton = '<div class="mt-1 px-2 py-1 bg-gray-300 text-gray-600 text-xs rounded text-center">Complet</div>';
+                            }
                         }
                     }
                 }
@@ -1363,21 +1435,50 @@ app.get('/', (c) => {
 
             async function assignSlot(slotId) {
                 try {
-                    const response = await axios.post('/api/schedule/' + slotId + '/assign', {
-                        volunteer_name: currentUser
-                    });
-
-                    if (response.data.success) {
-                        // Mettre à jour localement pour un feedback immédiat
-                        const slot = schedule.find(s => s.id == slotId);
-                        if (slot) {
-                            slot.volunteer_name = currentUser;
-                            slot.status = 'assigned';
-                        }
-                        renderCalendar();
-                    } else {
-                        showError('Erreur: ' + response.data.error);
+                    const slot = schedule.find(s => s.id == slotId);
+                    if (!slot) {
+                        showError('Créneau non trouvé');
+                        return;
                     }
+                    
+                    // Gérer le tableau de bénévoles
+                    if (!slot.volunteers) {
+                        slot.volunteers = [];
+                    }
+                    
+                    // Vérifier si l'utilisateur est déjà inscrit
+                    if (slot.volunteers.includes(currentUser)) {
+                        showError('Vous êtes déjà inscrit à cette activité');
+                        return;
+                    }
+                    
+                    // Vérifier la limite
+                    const maxVolunteers = slot.max_volunteers || 15;
+                    if (slot.volunteers.length >= maxVolunteers) {
+                        showError('Cette activité est complète (' + maxVolunteers + ' personnes max)');
+                        return;
+                    }
+                    
+                    // Ajouter le bénévole
+                    slot.volunteers.push(currentUser);
+                    
+                    // Pour compatibilité avec l'ancien système (nourrissages)
+                    if (slot.activity_type === 'Nourrissage') {
+                        slot.volunteer_name = currentUser;
+                    }
+                    
+                    slot.status = 'assigned';
+                    
+                    // Sauvegarder sur le serveur
+                    try {
+                        await axios.post('/api/schedule', schedule);
+                        console.log('✅ Assignment saved to server');
+                    } catch (saveError) {
+                        console.error('⚠️ Save error:', saveError);
+                    }
+                    
+                    renderCalendar();
+                    showError('Inscription réussie !', 'text-green-600');
                 } catch (error) {
                     console.error('Erreur:', error);
                     showError("Erreur lors de l'inscription");
@@ -1388,33 +1489,51 @@ app.get('/', (c) => {
                 if (!confirm('Êtes-vous sûr de vouloir vous désinscrire ?')) return;
 
                 try {
-                    const response = await axios.post('/api/schedule/' + slotId + '/unassign', {
-                        volunteer_name: currentUser
-                    });
-
-                    if (response.data.success) {
-                        // Sauvegarder l'état avant changement pour l'historique
-                        const slot = schedule.find(s => s.id == slotId);
-                        const oldState = slot ? { ...slot } : null;
-                        
-                        // Mettre à jour localement
-                        if (slot) {
-                            slot.volunteer_name = null;
-                            slot.status = 'available';
-                        }
-                        
-                        // Ajouter à l'historique
-                        actionHistory.addAction({
-                            type: 'unassign_slot',
-                            data: { slotId: slotId, user: currentUser },
-                            undoData: oldState
-                        });
-                        
-                        updateUndoRedoButtons();
-                        renderCalendar();
-                    } else {
-                        showError('Erreur: ' + response.data.error);
+                    const slot = schedule.find(s => s.id == slotId);
+                    if (!slot) {
+                        showError('Créneau non trouvé');
+                        return;
                     }
+                    
+                    // Sauvegarder l'état avant changement pour l'historique
+                    const oldState = { ...slot, volunteers: [...(slot.volunteers || [])] };
+                    
+                    // Gérer le tableau de bénévoles
+                    if (!slot.volunteers) {
+                        slot.volunteers = [];
+                    }
+                    
+                    // Retirer le bénévole du tableau
+                    slot.volunteers = slot.volunteers.filter(v => v !== currentUser);
+                    
+                    // Pour compatibilité avec l'ancien système (nourrissages)
+                    if (slot.activity_type === 'Nourrissage') {
+                        slot.volunteer_name = null;
+                    }
+                    
+                    // Mettre à jour le statut
+                    if (slot.volunteers.length === 0) {
+                        slot.status = slot.is_urgent_when_free ? 'urgent' : 'available';
+                    }
+                    
+                    // Sauvegarder sur le serveur
+                    try {
+                        await axios.post('/api/schedule', schedule);
+                        console.log('✅ Unassignment saved to server');
+                    } catch (saveError) {
+                        console.error('⚠️ Save error:', saveError);
+                    }
+                    
+                    // Ajouter à l'historique
+                    actionHistory.addAction({
+                        type: 'unassign_slot',
+                        data: { slotId: slotId, user: currentUser },
+                        undoData: oldState
+                    });
+                    
+                    updateUndoRedoButtons();
+                    renderCalendar();
+                    showError('Désinscription réussie', 'text-orange-600');
                 } catch (error) {
                     console.error('Erreur:', error);
                     showError("Erreur lors de la désinscription");
