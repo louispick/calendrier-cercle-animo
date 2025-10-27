@@ -97,9 +97,15 @@ webapp/
 - `POST /api/schedule/:id/unassign` - Désassigner un bénévole
 
 ### **Persistance des Données**
-- Mode développement : Simulation de sauvegarde
-- Mode production : Intégration Cloudflare D1 (base de données)
-- Fallback localStorage pour la résilience
+- **Mode actuel** : Persistance en mémoire côté serveur ✅
+  - Les inscriptions/désinscriptions persistent lors du rafraîchissement de la page
+  - Les nouvelles activités ajoutées sont conservées
+  - Les données sont stockées en mémoire sur le serveur
+  - ⚠️ Les données sont réinitialisées au redémarrage du serveur
+- **Future migration** : Cloudflare D1 (base de données SQL)
+  - Persistance permanente même après redémarrage
+  - Historique complet des modifications
+  - Support multi-utilisateurs avancé
 
 ### **Sécurité**
 - Validation côté client et serveur
@@ -108,17 +114,20 @@ webapp/
 
 ## 🐛 Corrections Récentes
 
-### **Version Actuelle (Fonctionnelle)**
+### **Version Actuelle (v2.0 - Octobre 2025)**
 - ✅ Calendrier s'affiche correctement
-- ✅ Ajout d'activités avec persistance API
-- ✅ Correction des erreurs JavaScript de syntaxe
+- ✅ Ajout d'activités fonctionnel avec ID séquentiel
+- ✅ **Persistance en mémoire côté serveur** 🆕
+- ✅ **Inscriptions/désinscriptions persistantes** 🆕
 - ✅ Interface utilisateur réactive et stable
+- ✅ Correction des erreurs JavaScript de syntaxe
 
-### **Problèmes Résolus**
-- 🔧 Erreur "missing ) after argument list" corrigée
+### **Problèmes Résolus (Dernières mises à jour)**
+- 🔧 **RangeError lors de l'ajout d'activité** - Corrigé par système d'ID séquentiel
+- 🔧 **Perte des données au refresh** - Corrigé par persistance côté serveur
 - 🔧 Apostrophes françaises échappées correctement
 - 🔧 Route POST /api/schedule ajoutée
-- 🔧 Intégration API dans submitAddActivity()
+- 🔧 Intégration API complète dans toutes les actions
 
 ## 👨‍💻 Développement
 
