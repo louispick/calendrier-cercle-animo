@@ -14,6 +14,97 @@ app.use('/api/*', cors())
 // Servir les fichiers statiques
 app.use('/static/*', serveStatic({ root: './public' }))
 
+// === PERSISTANCE EN MÉMOIRE ===
+// Cette variable stockera le planning côté serveur
+// Note: Les données seront perdues au redémarrage du serveur
+// Pour une vraie persistance, utiliser Cloudflare D1 ou KV
+let serverSchedule: any[] | null = null;
+
+// Fonction pour générer le planning initial
+function generateInitialSchedule() {
+  const today = new Date();
+  const schedule = [];
+  
+  // Trouver le lundi de la semaine actuelle (pas la suivante)
+  const currentMonday = new Date(today);
+  const dayOfWeek = today.getDay();
+  const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // 0 = dimanche
+  currentMonday.setDate(today.getDate() + daysToMonday);
+  
+  // Générateur de données de test amélioré
+  for (let week = 0; week < 4; week++) {
+    for (let day = 0; day < 7; day++) {
+      const date = new Date(currentMonday);
+      date.setDate(currentMonday.getDate() + (week * 7) + day);
+      const dateStr = date.toISOString().split('T')[0];
+      
+      // Nourrissage quotidien avec gestion avancée des statuts
+      const nourrissageId = week * 20 + day + 1;
+      let nourrissageStatus, nourrissageVolunteer = null;
+      
+      // Logique de test pour les statuts
+      if (day === 0 || day === 3) { // Lundi et Jeudi urgents
+        nourrissageStatus = 'urgent';
+      } else if (day === 1) { // Mardi assigné
+        nourrissageStatus = 'assigned';
+        nourrissageVolunteer = 'Alice';
+      } else if (day === 5 && week < 2) { // Samedi assigné sur 2 premières semaines
+        nourrissageStatus = 'assigned';
+        nourrissageVolunteer = 'Les Furgettes';
+      } else {
+        nourrissageStatus = 'available';
+      }
+      
+      schedule.push({
+        id: nourrissageId,
+        date: dateStr,
+        day_of_week: day + 1,
+        activity_type: 'Nourrissage',
+        volunteer_name: nourrissageVolunteer,
+        status: nourrissageStatus,
+        color: '#dc3545', // Rouge pour urgent par défaut
+        max_volunteers: 1,
+        notes: '',
+        is_urgent_when_free: day === 0 || day === 3
+      });
+      
+      // Légumes le mardi avec Clement par défaut
+      if (day === 1) {
+        schedule.push({
+          id: week * 20 + day + 10,
+          date: dateStr,
+          day_of_week: day + 1,
+          activity_type: 'Légumes',
+          volunteer_name: 'Clement',
+          status: 'assigned',
+          color: '#ffc107', // Jaune pour légumes
+          max_volunteers: 2,
+          notes: '',
+          is_urgent_when_free: false
+        });
+      }
+      
+      // Quelques réunions d'exemple
+      if (day === 4 && week === 1) { // Vendredi semaine 2
+        schedule.push({
+          id: week * 20 + day + 15,
+          date: dateStr,
+          day_of_week: day + 1,
+          activity_type: 'Réunion',
+          volunteer_name: null,
+          status: 'available',
+          color: '#6f42c1', // Violet pour réunions
+          max_volunteers: 5,
+          notes: 'Réunion mensuelle du Cercle Animo',
+          is_urgent_when_free: false
+        });
+      }
+    }
+  }
+  
+  return schedule;
+}
+
 // Routes API
 
 // API - Récupérer tous les bénévoles
@@ -74,88 +165,16 @@ app.get('/api/activity-types', async (c) => {
 // API - Récupérer le planning (prochaines 4 semaines)
 app.get('/api/schedule', async (c) => {
   try {
-    const today = new Date();
-    const schedule = [];
-    
-    // Trouver le lundi de la semaine actuelle (pas la suivante)
-    const currentMonday = new Date(today);
-    const dayOfWeek = today.getDay();
-    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // 0 = dimanche
-    currentMonday.setDate(today.getDate() + daysToMonday);
-    
-    // Générateur de données de test amélioré
-    for (let week = 0; week < 4; week++) {
-      for (let day = 0; day < 7; day++) {
-        const date = new Date(currentMonday);
-        date.setDate(currentMonday.getDate() + (week * 7) + day);
-        const dateStr = date.toISOString().split('T')[0];
-        
-        // Nourrissage quotidien avec gestion avancée des statuts
-        const nourrissageId = week * 20 + day + 1;
-        let nourrissageStatus, nourrissageVolunteer = null;
-        
-        // Logique de test pour les statuts
-        if (day === 0 || day === 3) { // Lundi et Jeudi urgents
-          nourrissageStatus = 'urgent';
-        } else if (day === 1) { // Mardi assigné
-          nourrissageStatus = 'assigned';
-          nourrissageVolunteer = 'Alice';
-        } else if (day === 5 && week < 2) { // Samedi assigné sur 2 premières semaines
-          nourrissageStatus = 'assigned';
-          nourrissageVolunteer = 'Les Furgettes';
-        } else {
-          nourrissageStatus = 'available';
-        }
-        
-        schedule.push({
-          id: nourrissageId,
-          date: dateStr,
-          day_of_week: day + 1,
-          activity_type: 'Nourrissage',
-          volunteer_name: nourrissageVolunteer,
-          status: nourrissageStatus,
-          color: '#dc3545', // Rouge pour urgent par défaut
-          max_volunteers: 1,
-          notes: '',
-          is_urgent_when_free: day === 0 || day === 3
-        });
-        
-        // Légumes le mardi avec Clement par défaut
-        if (day === 1) {
-          schedule.push({
-            id: week * 20 + day + 10,
-            date: dateStr,
-            day_of_week: day + 1,
-            activity_type: 'Légumes',
-            volunteer_name: 'Clement',
-            status: 'assigned',
-            color: '#ffc107', // Jaune pour légumes
-            max_volunteers: 2,
-            notes: '',
-            is_urgent_when_free: false
-          });
-        }
-        
-        // Quelques réunions d'exemple
-        if (day === 4 && week === 1) { // Vendredi semaine 2
-          schedule.push({
-            id: week * 20 + day + 15,
-            date: dateStr,
-            day_of_week: day + 1,
-            activity_type: 'Réunion',
-            volunteer_name: null,
-            status: 'available',
-            color: '#6f42c1', // Violet pour réunions
-            max_volunteers: 5,
-            notes: 'Réunion mensuelle du Cercle Animo',
-            is_urgent_when_free: false
-          });
-        }
-      }
+    // Si le planning n'existe pas encore en mémoire, le générer
+    if (!serverSchedule) {
+      console.log('📋 Génération du planning initial');
+      serverSchedule = generateInitialSchedule();
     }
     
-    return c.json(schedule);
+    console.log('📤 Envoi du planning - count:', serverSchedule.length);
+    return c.json(serverSchedule);
   } catch (error) {
+    console.error('❌ Erreur lors de la récupération du planning:', error);
     return c.json({ error: 'Erreur lors de la récupération du planning' }, 500);
   }
 });
@@ -163,30 +182,34 @@ app.get('/api/schedule', async (c) => {
 // API - S'inscrire sur un créneau
 app.post('/api/schedule/:id/assign', async (c) => {
   try {
-    const { env } = c;
-    const slotId = c.req.param('id');
+    const slotId = parseInt(c.req.param('id'));
     const body = await c.req.json();
     const volunteer_name = body.volunteer_name;
     
-    console.log('Assign API called:', { slotId, volunteer_name, hasDB: !!(env && env.DB) });
+    console.log('✅ Assign API called:', { slotId, volunteer_name });
 
-    // Mode développement - toujours simuler (pas de vraie DB configurée)
-    console.log('Mode développement - simulation assign');
-    return c.json({ success: true, message: 'Inscription réussie (dev)' });
+    // Initialiser le planning si nécessaire
+    if (!serverSchedule) {
+      serverSchedule = generateInitialSchedule();
+    }
+
+    // Trouver le créneau dans le planning
+    const slot = serverSchedule.find(s => s.id === slotId);
     
-    const result = await env.DB.prepare(`
-      UPDATE time_slots 
-      SET volunteer_id = ?, status = 'assigned', updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).bind(volunteer_name, slotId).run();
-    
-    if (result.changes > 0) {
-      return c.json({ success: true, message: 'Inscription réussie' });
-    } else {
+    if (!slot) {
+      console.log('❌ Créneau non trouvé:', slotId);
       return c.json({ error: 'Créneau non trouvé' }, 404);
     }
+    
+    // Mettre à jour le créneau
+    slot.volunteer_name = volunteer_name;
+    slot.status = 'assigned';
+    
+    console.log('💾 Créneau assigné:', { id: slotId, volunteer: volunteer_name });
+    return c.json({ success: true, message: 'Inscription réussie', slot });
+    
   } catch (error) {
-    console.error('Erreur API assign:', error);
+    console.error('❌ Erreur API assign:', error);
     return c.json({ error: "Erreur lors de l'inscription: " + error.message }, 500);
   }
 });
@@ -194,28 +217,32 @@ app.post('/api/schedule/:id/assign', async (c) => {
 // API - Se désinscrire d'un créneau
 app.post('/api/schedule/:id/unassign', async (c) => {
   try {
-    const { env } = c;
-    const slotId = c.req.param('id');
+    const slotId = parseInt(c.req.param('id'));
     
-    console.log('Unassign API called:', { slotId, hasDB: !!(env && env.DB) });
+    console.log('🔄 Unassign API called:', { slotId });
 
-    // Mode développement - toujours simuler (pas de vraie DB configurée)
-    console.log('Mode développement - simulation unassign');
-    return c.json({ success: true, message: 'Désinscription réussie (dev)' });
+    // Initialiser le planning si nécessaire
+    if (!serverSchedule) {
+      serverSchedule = generateInitialSchedule();
+    }
+
+    // Trouver le créneau dans le planning
+    const slot = serverSchedule.find(s => s.id === slotId);
     
-    const result = await env.DB.prepare(`
-      UPDATE time_slots 
-      SET volunteer_id = NULL, status = 'available', updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).bind(slotId).run();
-    
-    if (result.changes > 0) {
-      return c.json({ success: true, message: 'Désinscription réussie' });
-    } else {
+    if (!slot) {
+      console.log('❌ Créneau non trouvé:', slotId);
       return c.json({ error: 'Créneau non trouvé' }, 404);
     }
+    
+    // Mettre à jour le créneau
+    slot.volunteer_name = null;
+    slot.status = slot.is_urgent_when_free ? 'urgent' : 'available';
+    
+    console.log('💾 Créneau libéré:', { id: slotId });
+    return c.json({ success: true, message: 'Désinscription réussie', slot });
+    
   } catch (error) {
-    console.error('Erreur API unassign:', error);
+    console.error('❌ Erreur API unassign:', error);
     return c.json({ error: 'Erreur lors de la désinscription: ' + error.message }, 500);
   }
 });
@@ -224,15 +251,24 @@ app.post('/api/schedule/:id/unassign', async (c) => {
 app.post('/api/schedule', async (c) => {
   try {
     const newSchedule = await c.req.json();
-    console.log('💾 Planning save requested - count:', newSchedule.length);
+    
+    // Valider que c'est bien un tableau
+    if (!Array.isArray(newSchedule)) {
+      return c.json({ error: 'Le planning doit être un tableau' }, 400);
+    }
+    
+    // Sauvegarder le planning complet en mémoire
+    serverSchedule = newSchedule;
+    
+    console.log('💾 Planning sauvegardé en mémoire - count:', newSchedule.length);
     return c.json({ 
       success: true, 
-      message: 'Planning saved successfully',
+      message: 'Planning sauvegardé avec succès',
       count: newSchedule.length 
     });
   } catch (error) {
-    console.error('❌ Save error:', error);
-    return c.json({ error: 'Save failed: ' + error.message }, 500);
+    console.error('❌ Erreur sauvegarde:', error);
+    return c.json({ error: 'Échec de la sauvegarde: ' + error.message }, 500);
   }
 });
 
