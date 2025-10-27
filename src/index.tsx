@@ -692,24 +692,14 @@ app.get('/', (c) => {
                             </label>
                             <input type="time" id="activityTime" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                         </div>
-                        <div class="mb-4">
-                            <label for="maxVolunteers" class="block text-sm font-medium text-gray-700 mb-2">
-                                Nombre maximum de bénévoles
-                            </label>
-                            <input type="number" id="maxVolunteers" min="1" max="10" value="1" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" required>
-                        </div>
+
                         <div class="mb-4">
                             <label for="activityNotes" class="block text-sm font-medium text-gray-700 mb-2">
                                 Notes (optionnel)
                             </label>
                             <textarea id="activityNotes" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Détails supplémentaires..."></textarea>
                         </div>
-                        <div class="mb-6">
-                            <label class="flex items-center">
-                                <input type="checkbox" id="isUrgent" class="mr-2">
-                                <span class="text-sm text-gray-700">Marquer comme urgent si libre</span>
-                            </label>
-                        </div>
+
                         <div class="flex gap-3">
                             <button type="button" id="cancelAddActivity" class="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 transition-colors">
                                 Annuler
@@ -766,24 +756,14 @@ app.get('/', (c) => {
                             </label>
                             <input type="time" id="modifyActivityTime" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                         </div>
-                        <div class="mb-4">
-                            <label for="modifyMaxVolunteers" class="block text-sm font-medium text-gray-700 mb-2">
-                                Nombre maximum de bénévoles
-                            </label>
-                            <input type="number" id="modifyMaxVolunteers" min="1" max="10" value="1" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" required>
-                        </div>
+
                         <div class="mb-4">
                             <label for="modifyActivityNotes" class="block text-sm font-medium text-gray-700 mb-2">
                                 Notes (optionnel)
                             </label>
                             <textarea id="modifyActivityNotes" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Détails supplémentaires..."></textarea>
                         </div>
-                        <div class="mb-6">
-                            <label class="flex items-center">
-                                <input type="checkbox" id="modifyIsUrgent" class="mr-2">
-                                <span class="text-sm text-gray-700">Marquer comme urgent si libre</span>
-                            </label>
-                        </div>
+
                         <div class="flex gap-3">
                             <button type="button" id="cancelModifyActivity" class="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 transition-colors">
                                 Annuler
@@ -1301,29 +1281,25 @@ app.get('/', (c) => {
                 if (currentUser) {
                     if (isAdminMode) {
                         // Mode admin : boutons pour assigner/désassigner n'importe qui
-                        const urgentButtonText = (slot.status === 'urgent' || slot.is_urgent_when_free) ? 'Normal' : 'Urgent';
-                        const urgentButtonClass = (slot.status === 'urgent' || slot.is_urgent_when_free) ? 'bg-gray-500 hover:bg-gray-600' : 'bg-yellow-500 hover:bg-yellow-600';
                         
                         // Boutons pour activités non-nourrissage
                         let modifyButton = '';
                         let deleteButton = '';
                         if (slot.activity_type !== 'Nourrissage') {
                             modifyButton = '<button onclick="modifyActivity(' + slot.id + ')" class="w-full px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600">Modifier</button>';
-                            // deleteButton = '<button onclick="deleteActivity(' + slot.id + ')" class="w-full px-2 py-1 bg-red-800 text-white text-xs rounded hover:bg-red-900">Supprimer</button>';
+                            deleteButton = '<button onclick="deleteActivity(' + slot.id + ')" class="w-full px-2 py-1 bg-red-800 text-white text-xs rounded hover:bg-red-900">Supprimer</button>';
                         }
                         
                         if (slot.volunteer_name) {
                             actionButton = '<div class="mt-1 space-y-1">' +
                                 '<button onclick="adminUnassignSlot(' + slot.id + ')" class="w-full px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600">Retirer</button>' +
                                 '<button onclick="adminChangeSlot(' + slot.id + ')" class="w-full px-2 py-1 bg-orange-500 text-white text-xs rounded hover:bg-orange-600">Changer</button>' +
-                                '<button onclick="toggleUrgentSlot(' + slot.id + ')" class="w-full px-2 py-1 ' + urgentButtonClass + ' text-white text-xs rounded">' + urgentButtonText + '</button>' +
                                 (modifyButton ? modifyButton : '') +
                                 (deleteButton ? deleteButton : '') +
                                 '</div>';
                         } else {
                             actionButton = '<div class="mt-1 space-y-1">' +
                                 '<button onclick="adminAssignSlot(' + slot.id + ')" class="w-full px-2 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600">Assigner</button>' +
-                                '<button onclick="toggleUrgentSlot(' + slot.id + ')" class="w-full px-2 py-1 ' + urgentButtonClass + ' text-white text-xs rounded">' + urgentButtonText + '</button>' +
                                 (modifyButton ? modifyButton : '') +
                                 (deleteButton ? deleteButton : '') +
                                 '</div>';
@@ -1567,43 +1543,65 @@ app.get('/', (c) => {
                 }
             }
 
-            async function toggleUrgentSlot(slotId) {
+            async function deleteActivity(slotId) {
+                if (!isAdminMode) {
+                    showError('Seuls les administrateurs peuvent supprimer des activités');
+                    return;
+                }
+                
                 try {
                     const slot = schedule.find(s => s.id == slotId);
-                    if (!slot) return;
+                    if (!slot) {
+                        showError('Activité non trouvée');
+                        return;
+                    }
                     
-                    const wasUrgent = slot.status === 'urgent' || slot.is_urgent_when_free;
-                    const newUrgentState = !wasUrgent;
+                    // Empêcher la suppression des activités de nourrissage
+                    if (slot.activity_type === 'Nourrissage') {
+                        showError('Impossible de supprimer les activités de nourrissage');
+                        return;
+                    }
                     
-                    // Mettre à jour le statut
-                    if (newUrgentState) {
-                        slot.is_urgent_when_free = true;
-                        if (!slot.volunteer_name) {
-                            slot.status = 'urgent';
-                        }
-                    } else {
-                        slot.is_urgent_when_free = false;
-                        if (slot.status === 'urgent' && !slot.volunteer_name) {
-                            slot.status = 'available';
-                        }
+                    const activityDesc = slot.activity_type + ' du ' + formatDate(slot.date);
+                    
+                    if (!confirm('Supprimer définitivement l\\'activité "' + activityDesc + '" ?')) {
+                        return;
+                    }
+                    
+                    // Sauvegarder l'activité pour l'historique (undo)
+                    const deletedActivity = { ...slot };
+                    
+                    // Supprimer l'activité du planning
+                    schedule = schedule.filter(s => s.id !== slotId);
+                    
+                    // Sauvegarder sur le serveur
+                    try {
+                        await axios.post('/api/schedule', schedule);
+                        console.log('✅ Activity deletion saved to server');
+                    } catch (saveError) {
+                        console.error('⚠️ Save error:', saveError);
                     }
                     
                     // Ajouter à l'historique
                     actionHistory.addAction({
-                        type: 'toggle_urgent',
-                        data: { slotId: slotId, newState: newUrgentState, admin: currentUser },
-                        undoData: { slotId: slotId, oldState: wasUrgent }
+                        type: 'delete_activity',
+                        data: { 
+                            slotId: slotId, 
+                            activityType: slot.activity_type,
+                            date: slot.date,
+                            user: currentUser 
+                        },
+                        undoData: { deletedActivity: deletedActivity }
                     });
                     
                     updateUndoRedoButtons();
                     renderCalendar();
                     
-                    const statusText = newUrgentState ? 'marqué comme urgent' : 'retiré de urgent';
-                    showError('Créneau ' + statusText, 'text-blue-600');
+                    showError('Activité "' + activityDesc + '" supprimée', 'text-red-600');
                     
                 } catch (error) {
                     console.error('Erreur:', error);
-                    showError('Erreur lors du changement urgent');
+                    showError('Erreur lors de la suppression de l\\'activité');
                 }
             }
 
@@ -1834,7 +1832,12 @@ app.get('/', (c) => {
                             renderCalendar();
                             showError('Modifications annulées', 'text-orange-600');
                         }
-                    // delete_activity undo handling removed
+                    } else if (action.type === 'delete_activity' && action.undoData) {
+                        // Restaurer l'activité qui avait été supprimée
+                        const deletedActivity = action.undoData.deletedActivity;
+                        schedule.push(deletedActivity);
+                        renderCalendar();
+                        showError('Activité restaurée (annulation suppression)', 'text-orange-600');
                     } else {
                         // Pour les autres types d'actions, juste afficher un message
                         showError('Action annulée: ' + action.type, 'text-orange-600');
@@ -1885,7 +1888,12 @@ app.get('/', (c) => {
                             renderCalendar();
                             showError('Modifications restaurées (refait)', 'text-green-600');
                         }
-                    // delete_activity redo handling removed
+                    } else if (action.type === 'delete_activity' && action.data) {
+                        // Refaire la suppression d'activité
+                        const slotId = action.data.slotId;
+                        schedule = schedule.filter(s => s.id !== slotId);
+                        renderCalendar();
+                        showError('Activité supprimée (refait)', 'text-red-600');
                     } else {
                         // Pour les autres types d'actions, juste afficher un message
                         showError('Action restaurée: ' + action.type, 'text-green-600');
@@ -1926,6 +1934,57 @@ app.get('/', (c) => {
 
             // === FONCTIONS MODALES ===
 
+            function formatHistoryMessage(action) {
+                const user = action.data?.user || action.data?.admin || 'Utilisateur inconnu';
+                const date = action.data?.date ? new Date(action.data.date).toLocaleDateString('fr-FR') : '';
+                
+                switch(action.type) {
+                    case 'add_activity':
+                        return 'Activité "' + action.data.activity.activity_type + '" du ' + 
+                               new Date(action.data.activity.date).toLocaleDateString('fr-FR') + 
+                               ' ajoutée par ' + user;
+                    
+                    case 'delete_activity':
+                        return 'Activité "' + action.data.activityType + '" du ' + 
+                               new Date(action.data.date).toLocaleDateString('fr-FR') + 
+                               ' supprimée par ' + user;
+                    
+                    case 'modify_activity':
+                        return 'Activité modifiée par ' + user;
+                    
+                    case 'admin_assign_slot':
+                        return user + ' a assigné ' + action.data.volunteer + ' à un créneau';
+                    
+                    case 'admin_unassign_slot':
+                        return user + ' a retiré ' + action.undoData.previousVolunteer + ' d\\'un créneau';
+                    
+                    case 'admin_change_slot':
+                        return user + ' a changé ' + action.undoData.previousVolunteer + 
+                               ' par ' + action.data.newVolunteer;
+                    
+                    case 'assign_slot':
+                        return user + ' s\\'est inscrit à un créneau';
+                    
+                    case 'unassign_slot':
+                        return user + ' s\\'est désinscrit d\\'un créneau';
+                    
+                    case 'add_new_week':
+                        return 'Semaine ' + (action.data.weekIndex + 1) + ' ajoutée par ' + user;
+                    
+                    case 'delete_week_row':
+                        return 'Semaine ' + (action.data.weekIndex + 1) + ' supprimée par ' + user;
+                    
+                    case 'admin_mode_enabled':
+                        return user + ' a activé le mode admin';
+                    
+                    case 'add_person':
+                        return 'Bénévole "' + action.data.person.name + '" ajouté par ' + user;
+                    
+                    default:
+                        return action.type + ' par ' + user;
+                }
+            }
+
             function openHistoryModal() {
                 const history = actionHistory.getHistory();
                 const historyList = document.getElementById('historyList');
@@ -1934,10 +1993,15 @@ app.get('/', (c) => {
                     historyList.innerHTML = '<p class="text-gray-500 text-center py-4">Aucun historique</p>';
                 } else {
                     historyList.innerHTML = history.map(action => {
-                        const timeStr = action.timestamp.toLocaleTimeString('fr-FR');
-                        return '<div class="p-3 bg-gray-50 rounded border">' +
-                            '<div class="font-medium">' + action.type + '</div>' +
-                            '<div class="text-sm text-gray-500">' + timeStr + '</div>' +
+                        const timeStr = action.timestamp.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                        const dateStr = action.timestamp.toLocaleDateString('fr-FR');
+                        const message = formatHistoryMessage(action);
+                        
+                        return '<div class="p-3 bg-gray-50 rounded border hover:bg-gray-100 transition-colors">' +
+                            '<div class="font-medium text-gray-800">' + message + '</div>' +
+                            '<div class="text-xs text-gray-500 mt-1">' +
+                            '<i class="fas fa-clock mr-1"></i>' + dateStr + ' à ' + timeStr +
+                            '</div>' +
                             '</div>';
                     }).join('');
                 }
@@ -2008,9 +2072,8 @@ app.get('/', (c) => {
                         type: activityType,
                         date: document.getElementById('activityDate').value,
                         time: activityTime,
-                        maxVolunteers: parseInt(document.getElementById('maxVolunteers').value),
-                        notes: document.getElementById('activityNotes').value.trim(),
-                        isUrgent: document.getElementById('isUrgent').checked
+                        maxVolunteers: 15,  // Limite par défaut à 15 personnes
+                        notes: document.getElementById('activityNotes').value.trim()
                     };
 
                     // Validation
@@ -2041,11 +2104,12 @@ app.get('/', (c) => {
                         day_of_week: dayOfWeek,
                         activity_type: formData.type,
                         volunteer_name: null,
-                        status: formData.isUrgent ? 'urgent' : 'available',
+                        volunteers: [],  // Liste des bénévoles inscrits (pour multi-personnes)
+                        status: 'available',
                         max_volunteers: formData.maxVolunteers,
                         notes: formData.notes,
                         time: formData.time,
-                        is_urgent_when_free: formData.isUrgent,
+                        is_urgent_when_free: false,
                         color: getColorForActivityType(formData.type)
                     };
 
@@ -2162,9 +2226,7 @@ app.get('/', (c) => {
 
                 document.getElementById('modifyActivityDate').value = slot.date;
                 document.getElementById('modifyActivityTime').value = slot.time || '';
-                document.getElementById('modifyMaxVolunteers').value = slot.max_volunteers || 1;
                 document.getElementById('modifyActivityNotes').value = slot.notes || '';
-                document.getElementById('modifyIsUrgent').checked = slot.is_urgent_when_free || false;
 
                 // Ouvrir le modal
                 document.getElementById('modifyActivityModal').classList.remove('hidden');
@@ -2207,9 +2269,8 @@ app.get('/', (c) => {
                         type: activityType,
                         date: document.getElementById('modifyActivityDate').value,
                         time: activityTime,
-                        maxVolunteers: parseInt(document.getElementById('modifyMaxVolunteers').value),
-                        notes: document.getElementById('modifyActivityNotes').value.trim(),
-                        isUrgent: document.getElementById('modifyIsUrgent').checked
+                        maxVolunteers: 15,  // Limite par défaut à 15 personnes
+                        notes: document.getElementById('modifyActivityNotes').value.trim()
                     };
 
                     // Validation
@@ -2246,7 +2307,7 @@ app.get('/', (c) => {
                         time: formData.time,
                         max_volunteers: formData.maxVolunteers,
                         notes: formData.notes,
-                        is_urgent_when_free: formData.isUrgent,
+                        is_urgent_when_free: false,
                         color: getColorForActivityType(formData.type)
                     };
 
