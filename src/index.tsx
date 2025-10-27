@@ -1993,9 +1993,10 @@ app.get('/', (c) => {
                     const dayOfWeek = activityDate.getDay() === 0 ? 7 : activityDate.getDay(); // Dimanche = 7, Lundi = 1
                     
                     // Générer un ID unique simple et sûr
-                    const baseId = Date.now();
-                    const randomSuffix = Math.floor(Math.random() * 1000);
-                    const newId = baseId + randomSuffix;
+                    // Trouver le plus grand ID existant et ajouter 1
+                    const existingIds = schedule.map(s => s.id);
+                    const maxId = existingIds.length > 0 ? Math.max(...existingIds) : 0;
+                    const newId = maxId + 1;
                     
                     // Créer la nouvelle activité
                     const newActivity = {
