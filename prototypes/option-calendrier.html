@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Option Calendrier - Vue Mobile</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; }
+        .modal { display: none; }
+        .modal.show { display: flex; }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="max-w-md mx-auto">
+        <!-- Header -->
+        <div class="bg-indigo-600 text-white p-4 sticky top-0 z-10 shadow-lg">
+            <h1 class="text-xl font-bold">📅 Calendrier Cercle Animô</h1>
+            <p class="text-sm opacity-90">Vue Calendrier - Vision globale</p>
+        </div>
+
+        <!-- Navigation mois -->
+        <div class="bg-white p-3 flex items-center justify-between border-b">
+            <button class="px-3 py-1 bg-gray-200 rounded">◄</button>
+            <span class="font-semibold">Novembre 2024</span>
+            <button class="px-3 py-1 bg-gray-200 rounded">►</button>
+        </div>
+
+        <!-- Mini Calendrier -->
+        <div class="bg-white p-4">
+            <!-- Jours de la semaine -->
+            <div class="grid grid-cols-7 gap-2 mb-2">
+                <div class="text-center text-xs font-medium text-gray-600">L</div>
+                <div class="text-center text-xs font-medium text-gray-600">M</div>
+                <div class="text-center text-xs font-medium text-gray-600">M</div>
+                <div class="text-center text-xs font-medium text-gray-600">J</div>
+                <div class="text-center text-xs font-medium text-gray-600">V</div>
+                <div class="text-center text-xs font-medium text-gray-600">S</div>
+                <div class="text-center text-xs font-medium text-gray-600">D</div>
+            </div>
+
+            <!-- Dates (Semaine 1) -->
+            <div class="grid grid-cols-7 gap-2">
+                <!-- Vides (fin octobre) -->
+                <div></div>
+                <div></div>
+                <div></div>
+                <div></div>
+
+                <!-- 1er nov (ven) -->
+                <button onclick="openDay(1)" class="aspect-square flex flex-col items-center justify-center border-2 border-gray-200 rounded-lg hover:border-indigo-400">
+                    <span class="text-sm font-medium">1</span>
+                    <div class="flex gap-0.5 mt-1">
+                        <span class="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                    </div>
+                </button>
+
+                <!-- 2 nov (sam) -->
+                <button onclick="openDay(2)" class="aspect-square flex flex-col items-center justify-center border-2 border-gray-200 rounded-lg hover:border-indigo-400">
+                    <span class="text-sm font-medium">2</span>
+                    <div class="flex gap-0.5 mt-1">
+                        <span class="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                    </div>
+                </button>
+
+                <!-- 3 nov (dim) -->
+                <button onclick="openDay(3)" class="aspect-square flex flex-col items-center justify-center border-2 border-gray-200 rounded-lg hover:border-indigo-400">
+                    <span class="text-sm font-medium">3</span>
+                    <div class="flex gap-0.5 mt-1">
+                        <span class="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                    </div>
+                </button>
+            </div>
+
+            <!-- Semaine 2 -->
+            <div class="grid grid-cols-7 gap-2 mt-2">
+                <!-- 4 nov (lun) -->
+                <button onclick="openDay(4)" class="aspect-square flex flex-col items-center justify-center border-2 border-gray-200 rounded-lg hover:border-indigo-400">
+                    <span class="text-sm font-medium">4</span>
+                    <div class="flex gap-0.5 mt-1">
+                        <span class="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                    </div>
+                </button>
+
+                <!-- 5 nov (mar) -->
+                <button onclick="openDay(5)" class="aspect-square flex flex-col items-center justify-center border-2 border-gray-200 rounded-lg hover:border-indigo-400">
+                    <span class="text-sm font-medium">5</span>
+                    <div class="flex gap-0.5 mt-1">
+                        <span class="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
+                        <span class="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
+                    </div>
+                </button>
+
+                <!-- 6 nov (mer) - URGENT -->
+                <button onclick="openDay(6)" class="aspect-square flex flex-col items-center justify-center border-2 border-red-500 rounded-lg hover:border-red-600 bg-red-50 animate-pulse">
+                    <span class="text-sm font-bold text-red-600">6</span>
+                    <div class="flex gap-0.5 mt-1">
+                        <span class="w-1.5 h-1.5 bg-red-500 rounded-full"></span>
+                    </div>
+                    <span class="text-xs text-red-600 font-bold">⚠️</span>
+                </button>
+
+                <!-- 7 nov (jeu) -->
+                <button onclick="openDay(7)" class="aspect-square flex flex-col items-center justify-center border-2 border-gray-200 rounded-lg hover:border-indigo-400">
+                    <span class="text-sm font-medium">7</span>
+                    <div class="flex gap-0.5 mt-1">
+                        <span class="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                    </div>
+                </button>
+
+                <!-- 8 nov (ven) - Événement -->
+                <button onclick="openDay(8)" class="aspect-square flex flex-col items-center justify-center border-2 border-purple-400 rounded-lg hover:border-purple-600 bg-purple-50">
+                    <span class="text-sm font-medium text-purple-700">8</span>
+                    <div class="flex gap-0.5 mt-1">
+                        <span class="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                        <span class="w-1.5 h-1.5 bg-purple-500 rounded-full"></span>
+                    </div>
+                    <span class="text-xs">🤝</span>
+                </button>
+
+                <!-- 9, 10 -->
+                <button onclick="openDay(9)" class="aspect-square flex flex-col items-center justify-center border-2 border-gray-200 rounded-lg hover:border-indigo-400">
+                    <span class="text-sm font-medium">9</span>
+                    <div class="flex gap-0.5 mt-1">
+                        <span class="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                    </div>
+                </button>
+                <button onclick="openDay(10)" class="aspect-square flex flex-col items-center justify-center border-2 border-gray-200 rounded-lg hover:border-indigo-400">
+                    <span class="text-sm font-medium">10</span>
+                    <div class="flex gap-0.5 mt-1">
+                        <span class="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                    </div>
+                </button>
+            </div>
+
+            <!-- Semaine 3 -->
+            <div class="grid grid-cols-7 gap-2 mt-2">
+                <button class="aspect-square flex flex-col items-center justify-center border-2 border-gray-200 rounded-lg">
+                    <span class="text-sm font-medium">11</span>
+                    <div class="flex gap-0.5 mt-1">
+                        <span class="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                    </div>
+                </button>
+                <button class="aspect-square flex flex-col items-center justify-center border-2 border-gray-200 rounded-lg">
+                    <span class="text-sm font-medium">12</span>
+                    <div class="flex gap-0.5 mt-1">
+                        <span class="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
+                    </div>
+                </button>
+                <div class="aspect-square flex items-center justify-center text-gray-400 text-sm">13</div>
+                <div class="aspect-square flex items-center justify-center text-gray-400 text-sm">14</div>
+                <div class="aspect-square flex items-center justify-center text-gray-400 text-sm">15</div>
+                <div class="aspect-square flex items-center justify-center text-gray-400 text-sm">16</div>
+                <div class="aspect-square flex items-center justify-center text-gray-400 text-sm">17</div>
+            </div>
+        </div>
+
+        <!-- Légende -->
+        <div class="bg-white p-4 mt-2 text-xs">
+            <div class="font-medium mb-2">Légende :</div>
+            <div class="space-y-1">
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 bg-green-500 rounded-full"></span>
+                    <span>Créneaux libres</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 bg-blue-500 rounded-full"></span>
+                    <span>Créneaux pris</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 bg-red-500 rounded-full"></span>
+                    <span>Créneaux URGENTS</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 bg-purple-500 rounded-full"></span>
+                    <span>Événements spéciaux</span>
+                </div>
+            </div>
+            <div class="mt-3 text-gray-600">
+                💡 Cliquez sur un jour pour voir les détails
+            </div>
+        </div>
+
+        <!-- Stats rapides -->
+        <div class="bg-white p-4 mt-2">
+            <div class="font-medium mb-2">Cette semaine :</div>
+            <div class="grid grid-cols-3 gap-3 text-center">
+                <div class="p-2 bg-green-50 rounded">
+                    <div class="text-2xl font-bold text-green-600">5</div>
+                    <div class="text-xs text-gray-600">Créneaux libres</div>
+                </div>
+                <div class="p-2 bg-blue-50 rounded">
+                    <div class="text-2xl font-bold text-blue-600">2</div>
+                    <div class="text-xs text-gray-600">Créneaux pris</div>
+                </div>
+                <div class="p-2 bg-red-50 rounded">
+                    <div class="text-2xl font-bold text-red-600">1</div>
+                    <div class="text-xs text-gray-600">Urgent</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Jour -->
+    <div id="dayModal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg max-w-md w-full max-h-[80vh] overflow-y-auto">
+            <div class="sticky top-0 bg-indigo-600 text-white p-4 rounded-t-lg flex justify-between items-center">
+                <h2 class="font-bold text-lg">Mercredi 6 novembre</h2>
+                <button onclick="closeModal()" class="text-2xl">×</button>
+            </div>
+            <div class="p-4 space-y-3">
+                <div class="bg-red-50 border-l-4 border-red-500 p-3 rounded">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="font-medium">🍖 Nourrissage</div>
+                        <span class="text-red-600 font-bold text-lg">⚠️</span>
+                    </div>
+                    <div class="text-sm text-red-600 font-medium mb-2">URGENT - Personne inscrit</div>
+                    <button class="w-full px-4 py-2 bg-red-500 text-white rounded font-bold">
+                        Je m'inscris !
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function openDay(day) {
+            document.getElementById('dayModal').classList.add('show');
+        }
+        function closeModal() {
+            document.getElementById('dayModal').classList.remove('show');
+        }
+    </script>
+</body>
+</html>
