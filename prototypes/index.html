@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prototypes Mobile - Calendrier Cercle Animô</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-br from-indigo-50 to-purple-50 min-h-screen">
+    <div class="max-w-4xl mx-auto p-6">
+        <h1 class="text-4xl font-bold text-center mb-2 text-indigo-900">📱 Prototypes Vue Mobile</h1>
+        <p class="text-center text-gray-600 mb-8">Calendrier Cercle Animô - Amélioration UX Mobile</p>
+
+        <div class="bg-yellow-50 border-l-4 border-yellow-500 p-4 mb-8 rounded">
+            <h2 class="font-bold text-yellow-800 mb-2">💡 Comment tester :</h2>
+            <ul class="text-sm text-yellow-900 space-y-1">
+                <li>• Ouvre les DevTools (F12) et active le mode mobile (Ctrl+Shift+M)</li>
+                <li>• Teste la navigation, le scroll, les interactions</li>
+                <li>• Imagine-toi en train de chercher un créneau libre rapidement</li>
+                <li>• Note ce qui te semble intuitif ou compliqué</li>
+            </ul>
+        </div>
+
+        <div class="grid md:grid-cols-3 gap-6">
+            <!-- Option 1 : Liste -->
+            <div class="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
+                <div class="h-48 bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
+                    <span class="text-6xl">📋</span>
+                </div>
+                <div class="p-6">
+                    <h3 class="text-xl font-bold mb-2 text-blue-900">Option 1 : Liste Verticale</h3>
+                    <p class="text-gray-600 text-sm mb-4">
+                        Toutes les activités en liste, groupées par semaine et jour. Scroll vertical simple.
+                    </p>
+                    <div class="space-y-2 text-xs text-gray-700 mb-4">
+                        <div class="flex items-start gap-2">
+                            <span class="text-green-600">✓</span>
+                            <span>Voir tout d'un coup d'œil</span>
+                        </div>
+                        <div class="flex items-start gap-2">
+                            <span class="text-green-600">✓</span>
+                            <span>Pas de scroll horizontal</span>
+                        </div>
+                        <div class="flex items-start gap-2">
+                            <span class="text-green-600">✓</span>
+                            <span>Boutons inscription directs</span>
+                        </div>
+                        <div class="flex items-start gap-2">
+                            <span class="text-orange-600">~</span>
+                            <span>Peut être long à scroller</span>
+                        </div>
+                    </div>
+                    <a href="option-liste.html" class="block w-full py-3 bg-blue-600 text-white text-center rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                        Voir le prototype →
+                    </a>
+                </div>
+            </div>
+
+            <!-- Option 2 : Accordéon -->
+            <div class="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow border-4 border-indigo-500">
+                <div class="h-48 bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center">
+                    <span class="text-6xl">▼</span>
+                </div>
+                <div class="p-6">
+                    <div class="flex items-center gap-2 mb-2">
+                        <h3 class="text-xl font-bold text-indigo-900">Option 2 : Accordéon</h3>
+                        <span class="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full font-bold">RECOMMANDÉ</span>
+                    </div>
+                    <p class="text-gray-600 text-sm mb-4">
+                        Jours repliables avec résumé. Urgents ouverts par défaut. Vue ultra-compacte.
+                    </p>
+                    <div class="space-y-2 text-xs text-gray-700 mb-4">
+                        <div class="flex items-start gap-2">
+                            <span class="text-green-600">✓</span>
+                            <span>Scan rapide (pastilles)</span>
+                        </div>
+                        <div class="flex items-start gap-2">
+                            <span class="text-green-600">✓</span>
+                            <span>Urgents bien visibles</span>
+                        </div>
+                        <div class="flex items-start gap-2">
+                            <span class="text-green-600">✓</span>
+                            <span>Focus sur l'important</span>
+                        </div>
+                        <div class="flex items-start gap-2">
+                            <span class="text-green-600">✓</span>
+                            <span>Plusieurs semaines visibles</span>
+                        </div>
+                    </div>
+                    <a href="option-accordeon.html" class="block w-full py-3 bg-indigo-600 text-white text-center rounded-lg font-medium hover:bg-indigo-700 transition-colors">
+                        Voir le prototype →
+                    </a>
+                </div>
+            </div>
+
+            <!-- Option 3 : Calendrier -->
+            <div class="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
+                <div class="h-48 bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
+                    <span class="text-6xl">📅</span>
+                </div>
+                <div class="p-6">
+                    <h3 class="text-xl font-bold mb-2 text-purple-900">Option 3 : Calendrier</h3>
+                    <p class="text-gray-600 text-sm mb-4">
+                        Vue mensuelle avec pastilles. Clic sur un jour → Modal avec détails.
+                    </p>
+                    <div class="space-y-2 text-xs text-gray-700 mb-4">
+                        <div class="flex items-start gap-2">
+                            <span class="text-green-600">✓</span>
+                            <span>Vue mois entier</span>
+                        </div>
+                        <div class="flex items-start gap-2">
+                            <span class="text-green-600">✓</span>
+                            <span>Très visuel (pastilles)</span>
+                        </div>
+                        <div class="flex items-start gap-2">
+                            <span class="text-green-600">✓</span>
+                            <span>Stats en un coup d'œil</span>
+                        </div>
+                        <div class="flex items-start gap-2">
+                            <span class="text-orange-600">~</span>
+                            <span>Besoin de cliquer pour détails</span>
+                        </div>
+                    </div>
+                    <a href="option-calendrier.html" class="block w-full py-3 bg-purple-600 text-white text-center rounded-lg font-medium hover:bg-purple-700 transition-colors">
+                        Voir le prototype →
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Comparaison -->
+        <div class="mt-12 bg-white rounded-xl shadow-lg p-6">
+            <h2 class="text-2xl font-bold mb-4 text-gray-800">🔍 Comparaison Rapide</h2>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b-2">
+                            <th class="text-left py-2">Critère</th>
+                            <th class="text-center py-2">📋 Liste</th>
+                            <th class="text-center py-2 bg-indigo-50">▼ Accordéon</th>
+                            <th class="text-center py-2">📅 Calendrier</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="border-b">
+                            <td class="py-2">Vue d'ensemble</td>
+                            <td class="text-center">⭐⭐⭐</td>
+                            <td class="text-center bg-indigo-50">⭐⭐⭐⭐</td>
+                            <td class="text-center">⭐⭐⭐⭐⭐</td>
+                        </tr>
+                        <tr class="border-b">
+                            <td class="py-2">Détails visibles</td>
+                            <td class="text-center">⭐⭐⭐⭐⭐</td>
+                            <td class="text-center bg-indigo-50">⭐⭐⭐⭐</td>
+                            <td class="text-center">⭐⭐</td>
+                        </tr>
+                        <tr class="border-b">
+                            <td class="py-2">Rapidité inscription</td>
+                            <td class="text-center">⭐⭐⭐⭐</td>
+                            <td class="text-center bg-indigo-50">⭐⭐⭐⭐</td>
+                            <td class="text-center">⭐⭐⭐</td>
+                        </tr>
+                        <tr class="border-b">
+                            <td class="py-2">Voir urgents</td>
+                            <td class="text-center">⭐⭐⭐⭐</td>
+                            <td class="text-center bg-indigo-50">⭐⭐⭐⭐⭐</td>
+                            <td class="text-center">⭐⭐⭐⭐⭐</td>
+                        </tr>
+                        <tr class="border-b">
+                            <td class="py-2">Compacité</td>
+                            <td class="text-center">⭐⭐⭐</td>
+                            <td class="text-center bg-indigo-50">⭐⭐⭐⭐⭐</td>
+                            <td class="text-center">⭐⭐⭐⭐</td>
+                        </tr>
+                        <tr>
+                            <td class="py-2">Navigation intuitive</td>
+                            <td class="text-center">⭐⭐⭐⭐</td>
+                            <td class="text-center bg-indigo-50">⭐⭐⭐⭐⭐</td>
+                            <td class="text-center">⭐⭐⭐⭐</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Note -->
+        <div class="mt-8 text-center text-gray-600 text-sm">
+            <p>Ces prototypes sont des maquettes statiques pour visualisation.</p>
+            <p class="mt-2">Teste-les sur mobile (ou DevTools mode mobile) pour une meilleure expérience !</p>
+        </div>
+    </div>
+</body>
+</html>

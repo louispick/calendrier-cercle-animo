@@ -1,6 +1,15 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { serveStatic } from 'hono/cloudflare-workers'
+import { 
+  getAllSchedule, 
+  getScheduleById, 
+  createScheduleSlot, 
+  updateScheduleSlot, 
+  deleteScheduleSlot, 
+  replaceSchedule,
+  initializeScheduleIfEmpty 
+} from './db-helpers'
 
 type Bindings = {
   DB: D1Database;
@@ -13,6 +22,98 @@ app.use('/api/*', cors())
 
 // Servir les fichiers statiques
 app.use('/static/*', serveStatic({ root: './public' }))
+
+// === PERSISTANCE D1 ===
+// Les données sont maintenant stockées dans Cloudflare D1
+// Persistance permanente garantie !
+
+// Fonction pour générer le planning initial
+function generateInitialSchedule() {
+  const today = new Date();
+  const schedule = [];
+  
+  // Trouver le lundi de la semaine actuelle (pas la suivante)
+  const currentMonday = new Date(today);
+  const dayOfWeek = today.getDay();
+  const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // 0 = dimanche
+  currentMonday.setDate(today.getDate() + daysToMonday);
+  
+  // Générateur de données de test amélioré
+  for (let week = 0; week < 4; week++) {
+    for (let day = 0; day < 7; day++) {
+      const date = new Date(currentMonday);
+      date.setDate(currentMonday.getDate() + (week * 7) + day);
+      const dateStr = date.toISOString().split('T')[0];
+      
+      // Nourrissage quotidien avec gestion avancée des statuts
+      const nourrissageId = week * 20 + day + 1;
+      let nourrissageStatus, nourrissageVolunteer = null;
+      
+      // Logique de test pour les statuts
+      if (day === 0 || day === 3) { // Lundi et Jeudi urgents
+        nourrissageStatus = 'urgent';
+      } else if (day === 1) { // Mardi assigné
+        nourrissageStatus = 'assigned';
+        nourrissageVolunteer = 'Alice';
+      } else if (day === 5 && week < 2) { // Samedi assigné sur 2 premières semaines
+        nourrissageStatus = 'assigned';
+        nourrissageVolunteer = 'Les Furgettes';
+      } else {
+        nourrissageStatus = 'available';
+      }
+      
+      schedule.push({
+        id: nourrissageId,
+        date: dateStr,
+        day_of_week: day + 1,
+        activity_type: 'Nourrissage',
+        volunteer_name: nourrissageVolunteer,
+        volunteers: nourrissageVolunteer ? [nourrissageVolunteer] : [],  // Initialiser le tableau
+        status: nourrissageStatus,
+        color: '#dc3545', // Rouge pour urgent par défaut
+        max_volunteers: 1,
+        notes: '',
+        is_urgent_when_free: day === 0 || day === 3
+      });
+      
+      // Légumes le mardi avec Clement par défaut
+      if (day === 1) {
+        schedule.push({
+          id: week * 20 + day + 10,
+          date: dateStr,
+          day_of_week: day + 1,
+          activity_type: 'Légumes',
+          volunteer_name: 'Clement',
+          volunteers: ['Clement'],  // Utiliser le nouveau format
+          status: 'assigned',
+          color: '#ffc107', // Jaune pour légumes
+          max_volunteers: 15,  // Limite uniforme de 15
+          notes: '',
+          is_urgent_when_free: false
+        });
+      }
+      
+      // Quelques réunions d'exemple
+      if (day === 4 && week === 1) { // Vendredi semaine 2
+        schedule.push({
+          id: week * 20 + day + 15,
+          date: dateStr,
+          day_of_week: day + 1,
+          activity_type: 'Réunion',
+          volunteer_name: null,
+          volunteers: [],  // Utiliser le nouveau format
+          status: 'available',
+          color: '#6f42c1', // Violet pour réunions
+          max_volunteers: 15,  // Limite uniforme de 15
+          notes: 'Réunion mensuelle du Cercle Animo',
+          is_urgent_when_free: false
+        });
+      }
+    }
+  }
+  
+  return schedule;
+}
 
 // Routes API
 
@@ -74,88 +175,18 @@ app.get('/api/activity-types', async (c) => {
 // API - Récupérer le planning (prochaines 4 semaines)
 app.get('/api/schedule', async (c) => {
   try {
-    const today = new Date();
-    const schedule = [];
+    const db = c.env.DB;
     
-    // Trouver le lundi de la semaine actuelle (pas la suivante)
-    const currentMonday = new Date(today);
-    const dayOfWeek = today.getDay();
-    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // 0 = dimanche
-    currentMonday.setDate(today.getDate() + daysToMonday);
+    // Initialize schedule if database is empty
+    await initializeScheduleIfEmpty(db);
     
-    // Générateur de données de test amélioré
-    for (let week = 0; week < 4; week++) {
-      for (let day = 0; day < 7; day++) {
-        const date = new Date(currentMonday);
-        date.setDate(currentMonday.getDate() + (week * 7) + day);
-        const dateStr = date.toISOString().split('T')[0];
-        
-        // Nourrissage quotidien avec gestion avancée des statuts
-        const nourrissageId = week * 20 + day + 1;
-        let nourrissageStatus, nourrissageVolunteer = null;
-        
-        // Logique de test pour les statuts
-        if (day === 0 || day === 3) { // Lundi et Jeudi urgents
-          nourrissageStatus = 'urgent';
-        } else if (day === 1) { // Mardi assigné
-          nourrissageStatus = 'assigned';
-          nourrissageVolunteer = 'Alice';
-        } else if (day === 5 && week < 2) { // Samedi assigné sur 2 premières semaines
-          nourrissageStatus = 'assigned';
-          nourrissageVolunteer = 'Les Furgettes';
-        } else {
-          nourrissageStatus = 'available';
-        }
-        
-        schedule.push({
-          id: nourrissageId,
-          date: dateStr,
-          day_of_week: day + 1,
-          activity_type: 'Nourrissage',
-          volunteer_name: nourrissageVolunteer,
-          status: nourrissageStatus,
-          color: '#dc3545', // Rouge pour urgent par défaut
-          max_volunteers: 1,
-          notes: '',
-          is_urgent_when_free: day === 0 || day === 3
-        });
-        
-        // Légumes le mardi avec Clement par défaut
-        if (day === 1) {
-          schedule.push({
-            id: week * 20 + day + 10,
-            date: dateStr,
-            day_of_week: day + 1,
-            activity_type: 'Légumes',
-            volunteer_name: 'Clement',
-            status: 'assigned',
-            color: '#ffc107', // Jaune pour légumes
-            max_volunteers: 2,
-            notes: '',
-            is_urgent_when_free: false
-          });
-        }
-        
-        // Quelques réunions d'exemple
-        if (day === 4 && week === 1) { // Vendredi semaine 2
-          schedule.push({
-            id: week * 20 + day + 15,
-            date: dateStr,
-            day_of_week: day + 1,
-            activity_type: 'Réunion',
-            volunteer_name: null,
-            status: 'available',
-            color: '#6f42c1', // Violet pour réunions
-            max_volunteers: 5,
-            notes: 'Réunion mensuelle du Cercle Animo',
-            is_urgent_when_free: false
-          });
-        }
-      }
-    }
+    // Get all schedule from D1
+    const schedule = await getAllSchedule(db);
     
+    console.log('📤 Envoi du planning - count:', schedule.length);
     return c.json(schedule);
   } catch (error) {
+    console.error('❌ Erreur lors de la récupération du planning:', error);
     return c.json({ error: 'Erreur lors de la récupération du planning' }, 500);
   }
 });
@@ -163,30 +194,37 @@ app.get('/api/schedule', async (c) => {
 // API - S'inscrire sur un créneau
 app.post('/api/schedule/:id/assign', async (c) => {
   try {
-    const { env } = c;
-    const slotId = c.req.param('id');
+    const db = c.env.DB;
+    const slotId = parseInt(c.req.param('id'));
     const body = await c.req.json();
     const volunteer_name = body.volunteer_name;
     
-    console.log('Assign API called:', { slotId, volunteer_name, hasDB: !!(env && env.DB) });
+    console.log('✅ Assign API called:', { slotId, volunteer_name });
 
-    // Mode développement - toujours simuler (pas de vraie DB configurée)
-    console.log('Mode développement - simulation assign');
-    return c.json({ success: true, message: 'Inscription réussie (dev)' });
+    // Get the slot from D1
+    const slot = await getScheduleById(db, slotId);
     
-    const result = await env.DB.prepare(`
-      UPDATE time_slots 
-      SET volunteer_id = ?, status = 'assigned', updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).bind(volunteer_name, slotId).run();
-    
-    if (result.changes > 0) {
-      return c.json({ success: true, message: 'Inscription réussie' });
-    } else {
+    if (!slot) {
+      console.log('❌ Créneau non trouvé:', slotId);
       return c.json({ error: 'Créneau non trouvé' }, 404);
     }
+    
+    // Update the slot
+    slot.volunteer_name = volunteer_name;
+    slot.status = 'assigned';
+    
+    // Add to volunteers array if not already there
+    if (!slot.volunteers.includes(volunteer_name)) {
+      slot.volunteers.push(volunteer_name);
+    }
+    
+    await updateScheduleSlot(db, slotId, slot);
+    
+    console.log('💾 Créneau assigné:', { id: slotId, volunteer: volunteer_name });
+    return c.json({ success: true, message: 'Inscription réussie', slot });
+    
   } catch (error) {
-    console.error('Erreur API assign:', error);
+    console.error('❌ Erreur API assign:', error);
     return c.json({ error: "Erreur lors de l'inscription: " + error.message }, 500);
   }
 });
@@ -194,28 +232,31 @@ app.post('/api/schedule/:id/assign', async (c) => {
 // API - Se désinscrire d'un créneau
 app.post('/api/schedule/:id/unassign', async (c) => {
   try {
-    const { env } = c;
-    const slotId = c.req.param('id');
+    const db = c.env.DB;
+    const slotId = parseInt(c.req.param('id'));
     
-    console.log('Unassign API called:', { slotId, hasDB: !!(env && env.DB) });
+    console.log('🔄 Unassign API called:', { slotId });
 
-    // Mode développement - toujours simuler (pas de vraie DB configurée)
-    console.log('Mode développement - simulation unassign');
-    return c.json({ success: true, message: 'Désinscription réussie (dev)' });
+    // Get the slot from D1
+    const slot = await getScheduleById(db, slotId);
     
-    const result = await env.DB.prepare(`
-      UPDATE time_slots 
-      SET volunteer_id = NULL, status = 'available', updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).bind(slotId).run();
-    
-    if (result.changes > 0) {
-      return c.json({ success: true, message: 'Désinscription réussie' });
-    } else {
+    if (!slot) {
+      console.log('❌ Créneau non trouvé:', slotId);
       return c.json({ error: 'Créneau non trouvé' }, 404);
     }
+    
+    // Update the slot
+    slot.volunteer_name = null;
+    slot.volunteers = [];
+    slot.status = slot.is_urgent_when_free ? 'urgent' : 'free';
+    
+    await updateScheduleSlot(db, slotId, slot);
+    
+    console.log('💾 Créneau libéré:', { id: slotId });
+    return c.json({ success: true, message: 'Désinscription réussie', slot });
+    
   } catch (error) {
-    console.error('Erreur API unassign:', error);
+    console.error('❌ Erreur API unassign:', error);
     return c.json({ error: 'Erreur lors de la désinscription: ' + error.message }, 500);
   }
 });
@@ -223,16 +264,50 @@ app.post('/api/schedule/:id/unassign', async (c) => {
 // API - Sauvegarder le planning complet
 app.post('/api/schedule', async (c) => {
   try {
+    const db = c.env.DB;
     const newSchedule = await c.req.json();
-    console.log('💾 Planning save requested - count:', newSchedule.length);
+    
+    // Valider que c'est bien un tableau
+    if (!Array.isArray(newSchedule)) {
+      return c.json({ error: 'Le planning doit être un tableau' }, 400);
+    }
+    
+    // Sauvegarder le planning complet dans D1
+    await replaceSchedule(db, newSchedule);
+    
+    console.log('💾 Planning sauvegardé dans D1 - count:', newSchedule.length);
     return c.json({ 
       success: true, 
-      message: 'Planning saved successfully',
+      message: 'Planning sauvegardé avec succès',
       count: newSchedule.length 
     });
   } catch (error) {
-    console.error('❌ Save error:', error);
-    return c.json({ error: 'Save failed: ' + error.message }, 500);
+    console.error('❌ Erreur sauvegarde:', error);
+    return c.json({ error: 'Échec de la sauvegarde: ' + error.message }, 500);
+  }
+});
+
+// API - Reset database (admin only)
+app.post('/api/reset-database', async (c) => {
+  try {
+    const db = c.env.DB;
+    
+    // Clear all data
+    await db.prepare('DELETE FROM schedule').run();
+    
+    // Reinitialize with fresh data
+    await initializeScheduleIfEmpty(db);
+    
+    const newSchedule = await getAllSchedule(db);
+    
+    return c.json({ 
+      success: true, 
+      message: 'Base de données réinitialisée',
+      count: newSchedule.length 
+    });
+  } catch (error) {
+    console.error('❌ Erreur reset:', error);
+    return c.json({ error: 'Échec de la réinitialisation: ' + error.message }, 500);
   }
 });
 
@@ -332,6 +407,7 @@ app.get('/', (c) => {
           .week-table td {
             min-height: 80px;
             vertical-align: top;
+            touch-action: pan-y pan-x; /* Allow vertical and horizontal scrolling on mobile */
           }
           
           @media (max-width: 768px) {
@@ -341,6 +417,12 @@ app.get('/', (c) => {
             .week-table td {
               padding: 0.5rem;
               min-height: 60px;
+              touch-action: pan-y pan-x; /* Explicitly allow scrolling on touch */
+            }
+            
+            /* Allow page scroll even when touching calendar container */
+            .overflow-x-auto {
+              touch-action: pan-y pan-x;
             }
           }
           
@@ -387,6 +469,29 @@ app.get('/', (c) => {
             transform: rotate(5deg);
             cursor: grabbing !important;
             z-index: 1000;
+          }
+          
+          /* Swipe Hint for Mobile */
+          .swipe-hint {
+            backdrop-filter: blur(4px);
+          }
+          
+          .swipe-arrow {
+            display: inline-block;
+            animation: swipeArrow 1.5s ease-in-out infinite;
+            font-size: 1.25rem;
+            font-weight: bold;
+          }
+          
+          @keyframes swipeArrow {
+            0%, 100% {
+              transform: translateX(0);
+              opacity: 1;
+            }
+            50% {
+              transform: translateX(-8px);
+              opacity: 0.6;
+            }
           }
           
           .drop-zone {
@@ -600,7 +705,7 @@ app.get('/', (c) => {
                 
                 <div class="mt-4 p-3 bg-yellow-100 border border-yellow-300 rounded text-sm text-black">
                     <i class="fas fa-info-circle mr-2 text-yellow-600"></i>
-                    <strong>Mode Admin activé :</strong> Glisser-déposer pour déplacer les activités • Boutons X pour supprimer les semaines • Gestion des urgences
+                    <strong>Mode Admin activé :</strong> Boutons X pour supprimer les semaines • Gestion des urgences
                 </div>
             </div>
 
@@ -656,24 +761,14 @@ app.get('/', (c) => {
                             </label>
                             <input type="time" id="activityTime" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                         </div>
-                        <div class="mb-4">
-                            <label for="maxVolunteers" class="block text-sm font-medium text-gray-700 mb-2">
-                                Nombre maximum de bénévoles
-                            </label>
-                            <input type="number" id="maxVolunteers" min="1" max="10" value="1" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" required>
-                        </div>
+
                         <div class="mb-4">
                             <label for="activityNotes" class="block text-sm font-medium text-gray-700 mb-2">
                                 Notes (optionnel)
                             </label>
                             <textarea id="activityNotes" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Détails supplémentaires..."></textarea>
                         </div>
-                        <div class="mb-6">
-                            <label class="flex items-center">
-                                <input type="checkbox" id="isUrgent" class="mr-2">
-                                <span class="text-sm text-gray-700">Marquer comme urgent si libre</span>
-                            </label>
-                        </div>
+
                         <div class="flex gap-3">
                             <button type="button" id="cancelAddActivity" class="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 transition-colors">
                                 Annuler
@@ -730,24 +825,14 @@ app.get('/', (c) => {
                             </label>
                             <input type="time" id="modifyActivityTime" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                         </div>
-                        <div class="mb-4">
-                            <label for="modifyMaxVolunteers" class="block text-sm font-medium text-gray-700 mb-2">
-                                Nombre maximum de bénévoles
-                            </label>
-                            <input type="number" id="modifyMaxVolunteers" min="1" max="10" value="1" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" required>
-                        </div>
+
                         <div class="mb-4">
                             <label for="modifyActivityNotes" class="block text-sm font-medium text-gray-700 mb-2">
                                 Notes (optionnel)
                             </label>
                             <textarea id="modifyActivityNotes" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Détails supplémentaires..."></textarea>
                         </div>
-                        <div class="mb-6">
-                            <label class="flex items-center">
-                                <input type="checkbox" id="modifyIsUrgent" class="mr-2">
-                                <span class="text-sm text-gray-700">Marquer comme urgent si libre</span>
-                            </label>
-                        </div>
+
                         <div class="flex gap-3">
                             <button type="button" id="cancelModifyActivity" class="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 transition-colors">
                                 Annuler
@@ -834,6 +919,7 @@ app.get('/', (c) => {
             let currentUser = null;
             let isAdminMode = false;
             let schedule = [];
+            let viewMode = 'calendar'; // 'calendar' ou 'table'
             
             // Classe pour gérer l'historique des actions
             class ActionHistory {
@@ -906,6 +992,9 @@ app.get('/', (c) => {
                     console.log('📅 Chargement planning...');
                     await loadSchedule();
                     console.log('✅ Application chargée avec succès');
+                    
+                    // Démarrer l'auto-refresh toutes les 15 secondes pour voir les changements des autres
+                    startAutoRefresh();
                 } catch (error) {
                     console.error('❌ Erreur lors du chargement:', error);
                 }
@@ -942,12 +1031,127 @@ app.get('/', (c) => {
                     const response = await axios.get('/api/schedule');
                     schedule = response.data;
                     console.log('Données reçues:', schedule.length, 'éléments');
+                    
+                    // Supprimer automatiquement la semaine précédente si on est mardi ou après
+                    await autoDeleteOldWeek();
+                    
                     renderCalendar();
                     console.log('Calendrier rendu avec succès');
                 } catch (error) {
                     console.error('Erreur lors du chargement:', error);
                     document.getElementById('loading').innerHTML = 
                         '<p class="text-red-600">❌ Erreur lors du chargement des données</p>';
+                }
+            }
+            
+            async function autoDeleteOldWeek() {
+                try {
+                    const today = new Date();
+                    const dayOfWeek = today.getDay(); // 0 = Dimanche, 1 = Lundi, 2 = Mardi, etc.
+                    
+                    // Ne supprimer que si on est mardi (2) ou après
+                    if (dayOfWeek < 2) {
+                        console.log('Pas encore mardi, conservation de toutes les semaines');
+                        return;
+                    }
+                    
+                    // Trouver le lundi de la semaine actuelle
+                    const currentMonday = getMonday(today);
+                    const currentMondayStr = currentMonday.toISOString().split('T')[0];
+                    
+                    // Grouper les activités par semaine
+                    const weekGroups = groupByWeeks(schedule);
+                    
+                    if (weekGroups.length === 0) return;
+                    
+                    // Trouver la semaine précédente (la première semaine qui n'est pas la semaine actuelle)
+                    let weekToDelete = null;
+                    let weekIndex = -1;
+                    
+                    for (let i = 0; i < weekGroups.length; i++) {
+                        const week = weekGroups[i];
+                        const weekMonday = getMonday(new Date(week[0].date));
+                        const weekMondayStr = weekMonday.toISOString().split('T')[0];
+                        
+                        // Si cette semaine est avant la semaine actuelle, c'est une semaine à supprimer
+                        if (weekMondayStr < currentMondayStr) {
+                            weekToDelete = week;
+                            weekIndex = i;
+                            break; // Supprimer seulement la première semaine passée trouvée
+                        }
+                    }
+                    
+                    // Si on a trouvé une semaine à supprimer
+                    if (weekToDelete && weekToDelete.length > 0) {
+                        const idsToDelete = weekToDelete.map(slot => slot.id);
+                        
+                        const firstDate = new Date(weekToDelete[0].date);
+                        const lastDate = new Date(weekToDelete[weekToDelete.length - 1].date);
+                        const weekInfo = 'du ' + firstDate.getDate() + '/' + (firstDate.getMonth() + 1) + 
+                                       ' au ' + lastDate.getDate() + '/' + (lastDate.getMonth() + 1);
+                        
+                        console.log('🗑️ Suppression automatique de la semaine précédente (' + weekInfo + ')');
+                        
+                        // Supprimer de la liste locale
+                        schedule = schedule.filter(slot => !idsToDelete.includes(slot.id));
+                        
+                        // Sauvegarder dans D1
+                        await axios.post('/api/schedule', schedule);
+                        
+                        // Recharger depuis le serveur pour synchroniser
+                        const response = await axios.get('/api/schedule');
+                        schedule = response.data;
+                        
+                        console.log('✅ Semaine précédente supprimée automatiquement');
+                    } else {
+                        console.log('Aucune semaine précédente à supprimer');
+                    }
+                } catch (error) {
+                    console.error('Erreur lors de la suppression automatique:', error);
+                    // Ne pas bloquer le chargement en cas d'erreur
+                }
+            }
+
+            let autoRefreshInterval = null;
+            
+            function startAutoRefresh() {
+                // Rafraîchir toutes les 15 secondes pour voir les changements des autres utilisateurs
+                autoRefreshInterval = setInterval(async () => {
+                    try {
+                        // Sauvegarder les positions de scroll
+                        const scrollPositions = {};
+                        document.querySelectorAll('.overflow-x-auto').forEach((container, index) => {
+                            scrollPositions[index] = container.scrollLeft;
+                        });
+                        
+                        const response = await axios.get('/api/schedule');
+                        const newSchedule = response.data;
+                        
+                        // Vérifier si les données ont changé
+                        if (JSON.stringify(newSchedule) !== JSON.stringify(schedule)) {
+                            console.log('🔄 Mise à jour auto : nouvelles données détectées');
+                            schedule = newSchedule;
+                            renderCalendar();
+                            
+                            // Restaurer les positions de scroll
+                            setTimeout(() => {
+                                document.querySelectorAll('.overflow-x-auto').forEach((container, index) => {
+                                    if (scrollPositions[index] !== undefined) {
+                                        container.scrollLeft = scrollPositions[index];
+                                    }
+                                });
+                            }, 50);
+                        }
+                    } catch (error) {
+                        console.error("Erreur lors de l'auto-refresh:", error);
+                    }
+                }, 15000); // 15 secondes
+            }
+            
+            function stopAutoRefresh() {
+                if (autoRefreshInterval) {
+                    clearInterval(autoRefreshInterval);
+                    autoRefreshInterval = null;
                 }
             }
 
@@ -1016,9 +1220,11 @@ app.get('/', (c) => {
                 saveUserToStorage(name);
             }
 
-            function showError(message) {
+            function showError(message, className = 'text-red-600') {
                 const errorDiv = document.getElementById('errorMessage');
-                document.getElementById('errorText').textContent = message;
+                const errorText = document.getElementById('errorText');
+                errorText.textContent = message;
+                errorText.className = className;
                 errorDiv.classList.remove('hidden');
                 setTimeout(() => errorDiv.classList.add('hidden'), 5000);
             }
@@ -1057,7 +1263,7 @@ app.get('/', (c) => {
 
 
             function renderCalendar() {
-                console.log('renderCalendar appelé, currentUser:', currentUser);
+                console.log('renderCalendar appelé, currentUser:', currentUser, 'viewMode:', viewMode);
                 
                 if (!currentUser) {
                     document.getElementById('calendar').innerHTML = 
@@ -1065,9 +1271,361 @@ app.get('/', (c) => {
                     return;
                 }
 
-                console.log('Rendu du calendrier pour:', currentUser);
+                // Router vers la bonne vue selon le mode
+                if (viewMode === 'calendar') {
+                    renderCalendarView();
+                } else {
+                    renderTableView();
+                }
+            }
+            
+            function renderCalendarView() {
+                console.log('Rendu en mode calendrier mensuel');
                 const calendar = document.getElementById('calendar');
                 calendar.innerHTML = '';
+                
+                // Container principal
+                const container = document.createElement('div');
+                container.className = 'space-y-4';
+                
+                // Navigation mois + bouton toggle vue
+                const navDiv = document.createElement('div');
+                navDiv.className = 'bg-white rounded-lg shadow p-4 flex items-center justify-between';
+                
+                const prevBtn = document.createElement('button');
+                prevBtn.className = 'px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg font-medium hover:bg-indigo-200';
+                prevBtn.textContent = '◄';
+                prevBtn.addEventListener('click', () => changeMonth(-1));
+                
+                const monthSpan = document.createElement('span');
+                monthSpan.id = 'currentMonth';
+                monthSpan.className = 'font-bold text-lg';
+                
+                const nextBtn = document.createElement('button');
+                nextBtn.className = 'px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg font-medium hover:bg-indigo-200';
+                nextBtn.textContent = '►';
+                nextBtn.addEventListener('click', () => changeMonth(1));
+                
+                navDiv.appendChild(prevBtn);
+                navDiv.appendChild(monthSpan);
+                navDiv.appendChild(nextBtn);
+                container.appendChild(navDiv);
+                
+                // Bouton toggle mode (visible sur mobile uniquement)
+                const toggleDiv = document.createElement('div');
+                toggleDiv.className = 'lg:hidden bg-white rounded-lg shadow p-3';
+                
+                const toggleBtn = document.createElement('button');
+                toggleBtn.className = 'w-full px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg font-medium flex items-center justify-center gap-2 hover:from-indigo-700 hover:to-purple-700 transition-all';
+                toggleBtn.innerHTML = '<span>📊</span><span>Passer à la vue détaillée (tableau)</span>';
+                toggleBtn.addEventListener('click', toggleViewMode);
+                
+                toggleDiv.appendChild(toggleBtn);
+                container.appendChild(toggleDiv);
+                
+                // Calendrier mensuel
+                const calendarContainer = document.createElement('div');
+                calendarContainer.className = 'bg-white rounded-lg shadow p-4';
+                calendarContainer.id = 'monthlyCalendar';
+                container.appendChild(calendarContainer);
+                
+                // Légende
+                const legendDiv = document.createElement('div');
+                legendDiv.className = 'bg-white rounded-lg shadow p-4 text-sm';
+                legendDiv.innerHTML = '<div class="font-semibold mb-3 text-gray-800">Légende :</div>' +
+                    '<div class="grid grid-cols-2 gap-3">' +
+                        '<div class="flex items-center gap-2">' +
+                            '<div class="w-4 h-4 bg-blue-200 border-2 border-blue-400 rounded flex items-center justify-center text-xs">⭕</div>' +
+                            '<span class="text-gray-700">Créneaux libres</span>' +
+                        '</div>' +
+                        '<div class="flex items-center gap-2">' +
+                            '<div class="w-4 h-4 bg-gray-600 border-2 border-gray-800 rounded flex items-center justify-center text-white text-xs font-bold">✓</div>' +
+                            '<span class="text-gray-700">Créneaux pris</span>' +
+                        '</div>' +
+                        '<div class="flex items-center gap-2">' +
+                            '<div class="w-4 h-4 bg-yellow-300 border-2 border-yellow-500 rounded flex items-center justify-center text-xs">⚠️</div>' +
+                            '<span class="text-gray-700">Créneaux URGENTS</span>' +
+                        '</div>' +
+                        '<div class="flex items-center gap-2">' +
+                            '<div class="w-4 h-4 bg-orange-300 border-2 border-orange-500 rounded flex items-center justify-center text-xs">🎉</div>' +
+                            '<span class="text-gray-700">Événements spéciaux</span>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="mt-3 text-xs text-gray-600 bg-blue-50 p-2 rounded">' +
+                        '💡 Cliquez sur un jour pour voir les détails et vous inscrire' +
+                    '</div>';
+                container.appendChild(legendDiv);
+                
+                // Stats semaine
+                const statsDiv = document.createElement('div');
+                statsDiv.className = 'bg-white rounded-lg shadow p-4';
+                statsDiv.id = 'weekStats';
+                container.appendChild(statsDiv);
+                
+                calendar.appendChild(container);
+                
+                // Générer le calendrier
+                generateMonthlyCalendar();
+            }
+            
+            function generateMonthlyCalendar() {
+                const today = new Date();
+                const currentMonth = today.getMonth();
+                const currentYear = today.getFullYear();
+                
+                // Mettre à jour le titre
+                const monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 
+                                   'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+                document.getElementById('currentMonth').textContent = monthNames[currentMonth] + ' ' + currentYear;
+                
+                // Grouper les activités par date
+                const activitiesByDate = {};
+                schedule.forEach(slot => {
+                    if (!activitiesByDate[slot.date]) {
+                        activitiesByDate[slot.date] = [];
+                    }
+                    activitiesByDate[slot.date].push(slot);
+                });
+                
+                // Calculer les dates du mois
+                const firstDay = new Date(currentYear, currentMonth, 1);
+                const lastDay = new Date(currentYear, currentMonth + 1, 0);
+                const startDay = firstDay.getDay() || 7; // Lundi = 1
+                const daysInMonth = lastDay.getDate();
+                
+                // Créer le calendrier
+                const calendarHtml = '<div class="mb-3 grid grid-cols-7 gap-1 text-center text-xs font-semibold text-gray-600">' +
+                        '<div>L</div><div>M</div><div>M</div><div>J</div><div>V</div><div>S</div><div>D</div>' +
+                    '</div>' +
+                    '<div class="grid grid-cols-7 gap-2" id="calendarDays"></div>';
+                document.getElementById('monthlyCalendar').innerHTML = calendarHtml;
+                
+                const calendarDays = document.getElementById('calendarDays');
+                
+                // Jours vides avant le 1er
+                for (let i = 1; i < startDay; i++) {
+                    const emptyDiv = document.createElement('div');
+                    emptyDiv.className = 'aspect-square';
+                    calendarDays.appendChild(emptyDiv);
+                }
+                
+                // Jours du mois
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const date = new Date(currentYear, currentMonth, day);
+                    const dateStr = date.toISOString().split('T')[0];
+                    const activities = activitiesByDate[dateStr] || [];
+                    
+                    const dayDiv = document.createElement('button');
+                    dayDiv.className = 'aspect-square flex flex-col items-center justify-center border-2 rounded-lg p-1 hover:shadow-lg transition-all';
+                    
+                    // Compter les types d'activités
+                    let hasUrgent = false;
+                    let hasFree = false;
+                    let hasTaken = false;
+                    let hasEvent = false;
+                    
+                    activities.forEach(act => {
+                        if (act.is_urgent_when_free || act.status === 'urgent') {
+                            hasUrgent = true;
+                        } else if (act.activity_type !== 'Nourrissage' && act.volunteers && act.volunteers.length > 0) {
+                            hasEvent = true;
+                        } else if (act.volunteers && act.volunteers.length > 0) {
+                            hasTaken = true;
+                        } else {
+                            hasFree = true;
+                        }
+                    });
+                    
+                    // Appliquer le style selon la priorité
+                    if (hasUrgent) {
+                        dayDiv.className += ' bg-yellow-100 border-yellow-400 animate-pulse';
+                    } else if (hasEvent) {
+                        dayDiv.className += ' bg-orange-100 border-orange-400';
+                    } else if (hasFree) {
+                        dayDiv.className += ' bg-blue-100 border-blue-300';
+                    } else if (hasTaken) {
+                        dayDiv.className += ' bg-gray-300 border-gray-500';
+                    } else {
+                        dayDiv.className += ' border-gray-200';
+                    }
+                    
+                    // Contenu du jour
+                    const daySpan = document.createElement('span');
+                    daySpan.className = 'text-sm font-medium ' + (hasUrgent ? 'text-red-700 font-bold' : 'text-gray-800');
+                    daySpan.textContent = day.toString();
+                    
+                    const iconsDiv = document.createElement('div');
+                    iconsDiv.className = 'flex flex-wrap gap-0.5 mt-1 justify-center';
+                    if (hasUrgent) {
+                        iconsDiv.innerHTML = '<span class="text-xs">⚠️</span>';
+                    } else if (hasEvent) {
+                        iconsDiv.innerHTML = '<span class="text-xs">🎉</span>';
+                    } else if (hasFree) {
+                        iconsDiv.innerHTML = '<span class="text-xs">⭕</span>';
+                    } else if (hasTaken) {
+                        iconsDiv.innerHTML = '<span class="text-xs">✓</span>';
+                    }
+                    
+                    dayDiv.appendChild(daySpan);
+                    dayDiv.appendChild(iconsDiv);
+                    dayDiv.onclick = () => openDayModal(dateStr, activities);
+                    calendarDays.appendChild(dayDiv);
+                }
+                
+                // Calculer les stats de la semaine actuelle
+                updateWeekStats();
+            }
+            
+            function updateWeekStats() {
+                const today = new Date();
+                const monday = getMonday(today);
+                const sundayDate = new Date(monday);
+                sundayDate.setDate(monday.getDate() + 6);
+                
+                let freeCount = 0;
+                let takenCount = 0;
+                let urgentCount = 0;
+                
+                schedule.forEach(slot => {
+                    const slotDate = new Date(slot.date);
+                    if (slotDate >= monday && slotDate <= sundayDate) {
+                        if (slot.is_urgent_when_free || slot.status === 'urgent') {
+                            urgentCount++;
+                        } else if (slot.volunteers && slot.volunteers.length > 0) {
+                            takenCount++;
+                        } else {
+                            freeCount++;
+                        }
+                    }
+                });
+                
+                const statsHtml = '<div class="font-semibold mb-3 text-gray-800">Cette semaine :</div>' +
+                    '<div class="grid grid-cols-3 gap-3">' +
+                        '<div class="text-center p-3 bg-blue-50 rounded-lg border border-blue-200">' +
+                            '<div class="text-2xl font-bold text-blue-600">' + freeCount + '</div>' +
+                            '<div class="text-xs text-gray-600 mt-1">Créneaux libres</div>' +
+                        '</div>' +
+                        '<div class="text-center p-3 bg-gray-50 rounded-lg border border-gray-300">' +
+                            '<div class="text-2xl font-bold text-gray-700">' + takenCount + '</div>' +
+                            '<div class="text-xs text-gray-600 mt-1">Créneaux pris</div>' +
+                        '</div>' +
+                        '<div class="text-center p-3 bg-yellow-50 rounded-lg border border-yellow-300">' +
+                            '<div class="text-2xl font-bold text-red-600">' + urgentCount + '</div>' +
+                            '<div class="text-xs text-gray-600 mt-1">Urgents ⚠️</div>' +
+                        '</div>' +
+                    '</div>';
+                document.getElementById('weekStats').innerHTML = statsHtml;
+            }
+            
+            function openDayModal(dateStr, activities) {
+                const date = new Date(dateStr);
+                const dayNames = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+                const dayName = dayNames[date.getDay()];
+                const formattedDate = date.getDate() + ' ' + ['janv.', 'févr.', 'mars', 'avril', 'mai', 'juin', 
+                    'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'][date.getMonth()];
+                
+                // Créer le modal
+                const modal = document.createElement('div');
+                modal.className = 'fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4';
+                modal.onclick = (e) => {
+                    if (e.target === modal) modal.remove();
+                };
+                
+                const modalContent = document.createElement('div');
+                modalContent.className = 'bg-white rounded-lg max-w-md w-full max-h-[80vh] overflow-y-auto shadow-2xl';
+                
+                let activitiesHtml = '';
+                if (activities.length === 0) {
+                    activitiesHtml = '<p class="text-center text-gray-500 py-4">Aucune activité ce jour</p>';
+                } else {
+                    activities.forEach(slot => {
+                        const isUrgent = slot.is_urgent_when_free || slot.status === 'urgent';
+                        const isFree = !slot.volunteers || slot.volunteers.length === 0;
+                        const volunteers = slot.volunteers || [];
+                        const isUserRegistered = volunteers.includes(currentUser);
+                        const isNourrissage = slot.activity_type === 'Nourrissage';
+                        const maxVolunteers = isNourrissage ? 1 : 15;
+                        const isFull = volunteers.length >= maxVolunteers;
+                        
+                        let bgColor = 'bg-blue-50 border-blue-300';
+                        let statusText = '⭕ Libre';
+                        let buttonHtml = '';
+                        
+                        if (isUrgent) {
+                            bgColor = 'bg-yellow-50 border-yellow-400';
+                            statusText = '⚠️ URGENT - Personne inscrit';
+                            buttonHtml = '<button onclick="assignSlot(' + slot.id + '); document.querySelector(\'.fixed\').remove();" class="w-full px-4 py-2 bg-red-500 text-white rounded font-bold hover:bg-red-600">Je m\\'inscris !</button>';
+                        } else if (isUserRegistered) {
+                            bgColor = 'bg-gray-100 border-gray-400';
+                            statusText = '✓ Vous êtes inscrit';
+                            buttonHtml = '<button onclick="unassignSlot(' + slot.id + '); document.querySelector(\'.fixed\').remove();" class="w-full px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">Me désinscrire</button>';
+                        } else if (isFull) {
+                            bgColor = 'bg-gray-200 border-gray-400';
+                            statusText = '✓ Complet (' + volunteers.length + '/' + maxVolunteers + ')';
+                        } else if (!isFree) {
+                            bgColor = 'bg-gray-50 border-gray-300';
+                            statusText = '👤 ' + volunteers.join(', ') + (isNourrissage ? '' : ' (' + volunteers.length + '/' + maxVolunteers + ')');
+                            if (!isFull) {
+                                buttonHtml = '<button onclick="assignSlot(' + slot.id + '); document.querySelector(\'.fixed\').remove();" class="w-full px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">M\\'inscrire aussi</button>';
+                            }
+                        } else {
+                            buttonHtml = '<button onclick="assignSlot(' + slot.id + '); document.querySelector(\\.fixed\\').remove();" class="w-full px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">M\\'inscrire</button>';
+                        }
+                        
+                        activitiesHtml += '<div class="border-l-4 ' + bgColor + ' p-3 rounded mb-3">' +
+                                '<div class="font-medium text-sm mb-1">' + slot.activity_type + (slot.time ? ' - ' + slot.time : '') + '</div>' +
+                                '<div class="text-xs text-gray-600 mb-2">' + statusText + '</div>' +
+                                (slot.notes ? '<div class="text-xs italic text-gray-500 mb-2">' + slot.notes + '</div>' : '') +
+                                buttonHtml +
+                            '</div>';
+                    });
+                }
+                
+                modalContent.innerHTML = '<div class="sticky top-0 bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-4 rounded-t-lg flex justify-between items-center">' +
+                        '<div>' +
+                            '<h2 class="font-bold text-lg">' + dayName + '</h2>' +
+                            '<p class="text-sm opacity-90">' + formattedDate + '</p>' +
+                        '</div>' +
+                        '<button onclick="this.closest(\'.fixed\').remove()" class="text-3xl hover:bg-white hover:bg-opacity-20 rounded px-2">×</button>' +
+                    '</div>' +
+                    '<div class="p-4">' +
+                        activitiesHtml +
+                    '</div>';
+                
+                modal.appendChild(modalContent);
+                document.body.appendChild(modal);
+            }
+            
+            function changeMonth(direction) {
+                // TODO: Implémenter la navigation entre mois
+                console.log('Navigation mois:', direction);
+            }
+            
+            function toggleViewMode() {
+                viewMode = viewMode === 'calendar' ? 'table' : 'calendar';
+                localStorage.setItem('viewMode', viewMode);
+                renderCalendar();
+                
+                // Scroll en haut après changement de vue
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+            
+            function renderTableView() {
+                console.log('Rendu du calendrier en mode tableau pour:', currentUser);
+                const calendar = document.getElementById('calendar');
+                calendar.innerHTML = '';
+                
+                // Bouton toggle mode (visible sur mobile uniquement)
+                const toggleDiv = document.createElement('div');
+                toggleDiv.className = 'lg:hidden bg-white rounded-lg shadow p-3 mb-4';
+                
+                const toggleBtn = document.createElement('button');
+                toggleBtn.className = 'w-full px-4 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-medium flex items-center justify-center gap-2 hover:from-purple-700 hover:to-indigo-700 transition-all';
+                toggleBtn.innerHTML = '<span>📅</span><span>Passer à la vue calendrier (mois)</span>';
+                toggleBtn.addEventListener('click', toggleViewMode);
+                
+                toggleDiv.appendChild(toggleBtn);
+                calendar.appendChild(toggleDiv);
 
                 const weekGroups = groupByWeeks(schedule);
                 const today = new Date().toISOString().split('T')[0];
@@ -1078,7 +1636,39 @@ app.get('/', (c) => {
                     
                     // Conteneur avec scroll horizontal sur mobile
                     const tableContainer = document.createElement('div');
-                    tableContainer.className = 'overflow-x-auto';
+                    tableContainer.className = 'overflow-x-auto relative';
+                    
+                    // Indicateur de scroll permanent pour mobile (disparaît définitivement après premier scroll)
+                    const swipeHintSeen = localStorage.getItem('swipeHintSeen');
+                    
+                    if (!swipeHintSeen) {
+                        const swipeHint = document.createElement('div');
+                        swipeHint.className = 'swipe-hint lg:hidden absolute right-0 top-1/2 transform -translate-y-1/2 bg-gradient-to-l from-indigo-600 to-indigo-500 text-white px-4 py-3 rounded-l-lg shadow-xl pointer-events-none z-20 transition-all duration-300';
+                        swipeHint.innerHTML = '<div class="flex items-center gap-2 font-semibold text-sm">' +
+                            '<span class="swipe-arrow">↔</span>' +
+                            '<span>Glissez</span>' +
+                            '</div>';
+                        
+                        // Gérer la visibilité selon le scroll - masquer définitivement dès le premier scroll
+                        tableContainer.addEventListener('scroll', () => {
+                            const scrollLeft = tableContainer.scrollLeft;
+                            
+                            // Masquer définitivement dès qu'on scrolle (pas de réapparition)
+                            if (scrollLeft > 10) {
+                                swipeHint.style.opacity = '0';
+                                swipeHint.style.transform = 'translateX(100%) translateY(-50%)';
+                                localStorage.setItem('swipeHintSeen', 'true');
+                                // Retirer complètement l'élément du DOM après la transition
+                                setTimeout(() => {
+                                    if (swipeHint.parentNode) {
+                                        swipeHint.parentNode.removeChild(swipeHint);
+                                    }
+                                }, 300);
+                            }
+                        });
+                        
+                        tableContainer.appendChild(swipeHint);
+                    }
                     
                     // Créer le tableau
                     const table = document.createElement('table');
@@ -1122,10 +1712,58 @@ app.get('/', (c) => {
                     // Corps du tableau avec les activités
                     const tbody = document.createElement('tbody');
                     
-                    // Organiser les activités par type
-                    const activityTypesInWeek = [...new Set(week.map(slot => slot.activity_type))];
+                    // Organiser les activités par jour pour chaque ligne
+                    // Ligne 1 : Nourrissages
+                    // Lignes 2+ : Autres activités (autant de lignes que nécessaire)
                     
-                    activityTypesInWeek.forEach((activityType, typeIndex) => {
+                    // Créer la ligne des nourrissages (toujours en premier)
+                    const nourrissageRow = document.createElement('tr');
+                    nourrissageRow.className = 'border-b border-gray-200 hover:bg-gray-50';
+                    
+                    for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
+                        const cell = document.createElement('td');
+                        cell.className = 'p-2 lg:p-3 border-r border-gray-200 last:border-r-0 align-top';
+                        
+                        const dayDate = new Date(currentWeekStart);
+                        dayDate.setDate(currentWeekStart.getDate() + dayIndex);
+                        const isToday = dayDate.toISOString().split('T')[0] === today;
+                        
+                        if (isToday) {
+                            cell.classList.add('today-highlight');
+                        }
+                        
+                        // Trouver le nourrissage pour ce jour
+                        const nourrissage = week.find(slot => 
+                            slot.day_of_week === (dayIndex + 1) && 
+                            slot.activity_type === 'Nourrissage'
+                        );
+                        
+                        if (nourrissage) {
+                            const slotDiv = renderSlot(nourrissage);
+                            cell.appendChild(slotDiv);
+                        }
+                        
+                        nourrissageRow.appendChild(cell);
+                    }
+                    tbody.appendChild(nourrissageRow);
+                    
+                    // Organiser les autres activités par jour
+                    const otherActivitiesByDay = {};
+                    for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
+                        otherActivitiesByDay[dayIndex] = week.filter(slot => 
+                            slot.day_of_week === (dayIndex + 1) && 
+                            slot.activity_type !== 'Nourrissage'
+                        );
+                    }
+                    
+                    // Trouver le nombre maximum d'activités non-nourrissage sur un même jour
+                    const maxActivitiesPerDay = Math.max(
+                        0,
+                        ...Object.values(otherActivitiesByDay).map(acts => acts.length)
+                    );
+                    
+                    // Créer autant de lignes que nécessaire pour les autres activités
+                    for (let rowIndex = 0; rowIndex < maxActivitiesPerDay; rowIndex++) {
                         const row = document.createElement('tr');
                         row.className = 'border-b border-gray-200 hover:bg-gray-50';
                         
@@ -1144,7 +1782,7 @@ app.get('/', (c) => {
                             // Rendre la cellule capable d'accepter les drops si en mode admin
                             if (isAdminMode) {
                                 cell.setAttribute('data-day-index', dayIndex);
-                                cell.setAttribute('data-activity-type', activityType);
+                                cell.setAttribute('data-row-index', rowIndex + 1); // +1 car ligne 0 = nourrissage
                                 cell.setAttribute('data-date', dayDate.toISOString().split('T')[0]);
                                 cell.classList.add('drop-zone');
                                 
@@ -1155,21 +1793,18 @@ app.get('/', (c) => {
                                 cell.addEventListener('dragleave', handleDragLeave);
                             }
                             
-                            const dayActivities = week.filter(slot => 
-                                slot.day_of_week === (dayIndex + 1) && 
-                                slot.activity_type === activityType
-                            );
-                            
-                            dayActivities.forEach(slot => {
-                                const slotDiv = renderSlot(slot);
+                            // Afficher l'activité correspondant à cette ligne
+                            const activities = otherActivitiesByDay[dayIndex];
+                            if (activities && activities[rowIndex]) {
+                                const slotDiv = renderSlot(activities[rowIndex]);
                                 cell.appendChild(slotDiv);
-                            });
-
+                            }
+                            
                             row.appendChild(cell);
                         }
                         
                         tbody.appendChild(row);
-                    });
+                    }
 
                     table.appendChild(tbody);
                     tableContainer.appendChild(table);
@@ -1182,30 +1817,8 @@ app.get('/', (c) => {
                     const addWeekDiv = document.createElement('div');
                     addWeekDiv.className = 'text-center mt-6';
                     
-                    // Calculer les semaines manquantes restaurables
-                    const existingWeekIndexes = [...new Set(schedule.map(slot => Math.floor(slot.id / 20)))];
-                    const maxWeek = existingWeekIndexes.length > 0 ? Math.max(...existingWeekIndexes) : -1;
-                    const missingWeeks = [];
-                    for (let i = 4; i <= maxWeek; i++) {
-                        if (!existingWeekIndexes.includes(i)) {
-                            missingWeeks.push(i + 1);  // +1 pour affichage utilisateur
-                        }
-                    }
-                    
-                    let buttonText = '<i class="fas fa-plus mr-2"></i>Ajouter une semaine';
-                    let titleText = 'Ajouter une nouvelle semaine';
-                    let extraInfo = '';
-                    
-                    if (missingWeeks.length > 0) {
-                        buttonText = '<i class="fas fa-plus mr-2"></i>Restaurer semaine ' + missingWeeks[0];
-                        titleText = 'Restaurer la semaine supprimée ' + missingWeeks[0];
-                        if (missingWeeks.length > 1) {
-                            extraInfo = '<div class="text-sm text-gray-600 mt-2">Semaines restaurables : ' + missingWeeks.join(', ') + '</div>';
-                        }
-                    }
-                    
-                    addWeekDiv.innerHTML = '<button onclick="addNewWeek()" class="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors" title="' + titleText + '">' +
-                        buttonText + '</button>' + extraInfo;
+                    addWeekDiv.innerHTML = '<button onclick="addNewWeek()" class="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors" title="Ajouter une nouvelle semaine">' +
+                        '<i class="fas fa-plus mr-2"></i>Ajouter une semaine</button>';
                     calendar.appendChild(addWeekDiv);
                 }
                 
@@ -1221,6 +1834,16 @@ app.get('/', (c) => {
                 let statusClass = '';
                 let showUrgentBadge = false;
                 
+                // Définir les couleurs par type d'activité
+                const activityColors = {
+                    'Nourrissage': { bg: '#dc3545', border: '#c82333' },  // Rouge
+                    'Légumes': { bg: '#ffc107', border: '#e0a800' },      // Jaune
+                    'Réunion': { bg: '#6f42c1', border: '#5a32a3' },      // Violet
+                    'default': { bg: '#17a2b8', border: '#138496' }       // Cyan pour autres
+                };
+                
+                const activityColor = activityColors[slot.activity_type] || activityColors['default'];
+                
                 if (slot.activity_type.toLowerCase().includes('nourrissage')) {
                     // Pour le nourrissage : bleu si pris, vert si libre
                     // Les créneaux urgents sont TOUJOURS verts + pictogramme (même si pris)
@@ -1234,9 +1857,10 @@ app.get('/', (c) => {
                         showUrgentBadge = slot.status === 'urgent' || slot.is_urgent_when_free;
                     }
                 } else {
+                    // Pour les autres activités : utiliser les couleurs définies par type
                     statusClass = 'status-' + slot.status;
-                    slotDiv.style.backgroundColor = slot.color;
-                    slotDiv.style.border = '2px solid ' + slot.color;
+                    slotDiv.style.backgroundColor = activityColor.bg;
+                    slotDiv.style.border = '2px solid ' + activityColor.border;
                     slotDiv.style.borderRadius = '0.375rem';
                 }
                 
@@ -1252,11 +1876,24 @@ app.get('/', (c) => {
                     // Les event listeners sont maintenant gérés par délégation dans initEventDelegation()
                 }
 
+                // Gérer les bénévoles : tableau pour multi-bénévoles, ou ancien format volunteer_name
+                let volunteers = [];
+                if (slot.volunteers && Array.isArray(slot.volunteers)) {
+                    volunteers = slot.volunteers;
+                } else if (slot.volunteer_name) {
+                    volunteers = [slot.volunteer_name];
+                }
+                
+                // Limite : 1 pour nourrissages, 15 pour tout le reste
+                const maxVolunteers = slot.activity_type === 'Nourrissage' ? 1 : 15;
+                const isFull = volunteers.length >= maxVolunteers;
+                const isUserRegistered = volunteers.includes(currentUser);
+                
+                // Affichage des bénévoles - Toujours afficher tous les noms
                 let volunteersDisplay = '';
-                if (slot.volunteer_name) {
-                    // Échapper les caractères spéciaux pour éviter les problèmes JavaScript
-                    const escapedName = slot.volunteer_name.replace(/'/g, "\\'").replace(/"/g, '\\"');
-                    volunteersDisplay = '👤 ' + escapedName;
+                if (volunteers.length > 0) {
+                    // Afficher tous les prénoms séparés par des virgules
+                    volunteersDisplay = '👤 ' + volunteers.join(', ');
                 } else {
                     volunteersDisplay = '⭕ Libre';
                 }
@@ -1265,39 +1902,57 @@ app.get('/', (c) => {
                 if (currentUser) {
                     if (isAdminMode) {
                         // Mode admin : boutons pour assigner/désassigner n'importe qui
-                        const urgentButtonText = (slot.status === 'urgent' || slot.is_urgent_when_free) ? 'Normal' : 'Urgent';
-                        const urgentButtonClass = (slot.status === 'urgent' || slot.is_urgent_when_free) ? 'bg-gray-500 hover:bg-gray-600' : 'bg-yellow-500 hover:bg-yellow-600';
+                        
+                        // Bouton urgent/normal (UNIQUEMENT pour les nourrissages)
+                        let urgentButton = '';
+                        if (slot.activity_type === 'Nourrissage') {
+                            const urgentButtonText = (slot.status === 'urgent' || slot.is_urgent_when_free) ? 'Normal' : 'Urgent';
+                            const urgentButtonClass = (slot.status === 'urgent' || slot.is_urgent_when_free) ? 'bg-gray-500 hover:bg-gray-600' : 'bg-yellow-500 hover:bg-yellow-600';
+                            urgentButton = '<button onclick="toggleUrgentSlot(' + slot.id + ')" class="w-full px-2 py-1 ' + urgentButtonClass + ' text-white text-xs rounded">' + urgentButtonText + '</button>';
+                        }
                         
                         // Boutons pour activités non-nourrissage
                         let modifyButton = '';
                         let deleteButton = '';
                         if (slot.activity_type !== 'Nourrissage') {
                             modifyButton = '<button onclick="modifyActivity(' + slot.id + ')" class="w-full px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600">Modifier</button>';
-                            // deleteButton = '<button onclick="deleteActivity(' + slot.id + ')" class="w-full px-2 py-1 bg-red-800 text-white text-xs rounded hover:bg-red-900">Supprimer</button>';
+                            deleteButton = '<button onclick="deleteActivity(' + slot.id + ')" class="w-full px-2 py-1 bg-red-800 text-white text-xs rounded hover:bg-red-900">Supprimer</button>';
                         }
                         
-                        if (slot.volunteer_name) {
+                        if (volunteers.length > 0) {
                             actionButton = '<div class="mt-1 space-y-1">' +
+                                '<button onclick="adminAssignSlot(' + slot.id + ')" class="w-full px-2 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600">Ajouter</button>' +
                                 '<button onclick="adminUnassignSlot(' + slot.id + ')" class="w-full px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600">Retirer</button>' +
-                                '<button onclick="adminChangeSlot(' + slot.id + ')" class="w-full px-2 py-1 bg-orange-500 text-white text-xs rounded hover:bg-orange-600">Changer</button>' +
-                                '<button onclick="toggleUrgentSlot(' + slot.id + ')" class="w-full px-2 py-1 ' + urgentButtonClass + ' text-white text-xs rounded">' + urgentButtonText + '</button>' +
+                                (urgentButton ? urgentButton : '') +
                                 (modifyButton ? modifyButton : '') +
                                 (deleteButton ? deleteButton : '') +
                                 '</div>';
                         } else {
                             actionButton = '<div class="mt-1 space-y-1">' +
                                 '<button onclick="adminAssignSlot(' + slot.id + ')" class="w-full px-2 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600">Assigner</button>' +
-                                '<button onclick="toggleUrgentSlot(' + slot.id + ')" class="w-full px-2 py-1 ' + urgentButtonClass + ' text-white text-xs rounded">' + urgentButtonText + '</button>' +
+                                (urgentButton ? urgentButton : '') +
                                 (modifyButton ? modifyButton : '') +
                                 (deleteButton ? deleteButton : '') +
                                 '</div>';
                         }
                     } else {
                         // Mode normal : boutons pour l'utilisateur actuel
-                        if (slot.status === 'available' || slot.status === 'urgent' || !slot.volunteer_name) {
-                            actionButton = '<button onclick="assignSlot(' + slot.id + ')" class="mt-1 px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 w-full">Inscription</button>';
-                        } else if (slot.volunteer_name === currentUser) {
-                            actionButton = '<button onclick="unassignSlot(' + slot.id + ')" class="mt-1 px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 w-full">Desinscription</button>';
+                        // Pour les nourrissages : système classique (1 personne max)
+                        if (slot.activity_type === 'Nourrissage') {
+                            if (!volunteers.length || volunteers.length === 0) {
+                                actionButton = '<button onclick="assignSlot(' + slot.id + ')" class="mt-1 px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 w-full">Inscription</button>';
+                            } else if (isUserRegistered) {
+                                actionButton = '<button onclick="unassignSlot(' + slot.id + ')" class="mt-1 px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 w-full">Désinscription</button>';
+                            }
+                        } else {
+                            // Pour les autres activités : multi-bénévoles
+                            if (isUserRegistered) {
+                                actionButton = '<button onclick="unassignSlot(' + slot.id + ')" class="mt-1 px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 w-full">Désinscription</button>';
+                            } else if (!isFull) {
+                                actionButton = '<button onclick="assignSlot(' + slot.id + ')" class="mt-1 px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 w-full">Inscription</button>';
+                            } else {
+                                actionButton = '<div class="mt-1 px-2 py-1 bg-gray-300 text-gray-600 text-xs rounded text-center">Complet</div>';
+                            }
                         }
                     }
                 }
@@ -1351,21 +2006,65 @@ app.get('/', (c) => {
 
             async function assignSlot(slotId) {
                 try {
-                    const response = await axios.post('/api/schedule/' + slotId + '/assign', {
-                        volunteer_name: currentUser
-                    });
-
-                    if (response.data.success) {
-                        // Mettre à jour localement pour un feedback immédiat
-                        const slot = schedule.find(s => s.id == slotId);
-                        if (slot) {
-                            slot.volunteer_name = currentUser;
-                            slot.status = 'assigned';
-                        }
-                        renderCalendar();
-                    } else {
-                        showError('Erreur: ' + response.data.error);
+                    const slot = schedule.find(s => s.id == slotId);
+                    if (!slot) {
+                        showError('Créneau non trouvé');
+                        return;
                     }
+                    
+                    // Gérer le tableau de bénévoles
+                    if (!slot.volunteers) {
+                        slot.volunteers = [];
+                    }
+                    
+                    // Vérifier si l'utilisateur est déjà inscrit
+                    if (slot.volunteers.includes(currentUser)) {
+                        showError('Vous êtes déjà inscrit à cette activité');
+                        return;
+                    }
+                    
+                    // Vérifier la limite
+                    const maxVolunteers = slot.max_volunteers || 15;
+                    if (slot.volunteers.length >= maxVolunteers) {
+                        showError('Cette activité est complète (' + maxVolunteers + ' personnes max)');
+                        return;
+                    }
+                    
+                    // Ajouter le bénévole
+                    slot.volunteers.push(currentUser);
+                    
+                    // Pour compatibilité avec l'ancien système (nourrissages)
+                    if (slot.activity_type === 'Nourrissage') {
+                        slot.volunteer_name = currentUser;
+                    }
+                    
+                    slot.status = 'assigned';
+                    
+                    // Sauvegarder la position de scroll avant de re-rendre
+                    const scrollPositions = {};
+                    document.querySelectorAll('.overflow-x-auto').forEach((container, index) => {
+                        scrollPositions[index] = container.scrollLeft;
+                    });
+                    
+                    // Sauvegarder sur le serveur
+                    try {
+                        await axios.post('/api/schedule', schedule);
+                    } catch (saveError) {
+                        console.error('Save error:', saveError);
+                    }
+                    
+                    renderCalendar();
+                    
+                    // Restaurer les positions de scroll
+                    setTimeout(() => {
+                        document.querySelectorAll('.overflow-x-auto').forEach((container, index) => {
+                            if (scrollPositions[index] !== undefined) {
+                                container.scrollLeft = scrollPositions[index];
+                            }
+                        });
+                    }, 50);
+                    
+                    showError('Inscription réussie !', 'text-green-600');
                 } catch (error) {
                     console.error('Erreur:', error);
                     showError("Erreur lors de l'inscription");
@@ -1373,36 +2072,67 @@ app.get('/', (c) => {
             }
 
             async function unassignSlot(slotId) {
-                if (!confirm('Êtes-vous sûr de vouloir vous désinscrire ?')) return;
-
                 try {
-                    const response = await axios.post('/api/schedule/' + slotId + '/unassign', {
-                        volunteer_name: currentUser
-                    });
-
-                    if (response.data.success) {
-                        // Sauvegarder l'état avant changement pour l'historique
-                        const slot = schedule.find(s => s.id == slotId);
-                        const oldState = slot ? { ...slot } : null;
-                        
-                        // Mettre à jour localement
-                        if (slot) {
-                            slot.volunteer_name = null;
-                            slot.status = 'available';
-                        }
-                        
-                        // Ajouter à l'historique
-                        actionHistory.addAction({
-                            type: 'unassign_slot',
-                            data: { slotId: slotId, user: currentUser },
-                            undoData: oldState
-                        });
-                        
-                        updateUndoRedoButtons();
-                        renderCalendar();
-                    } else {
-                        showError('Erreur: ' + response.data.error);
+                    const slot = schedule.find(s => s.id == slotId);
+                    if (!slot) {
+                        showError('Créneau non trouvé');
+                        return;
                     }
+                    
+                    // Sauvegarder l'état avant changement pour l'historique
+                    const oldState = { ...slot, volunteers: [...(slot.volunteers || [])] };
+                    
+                    // Gérer le tableau de bénévoles
+                    if (!slot.volunteers) {
+                        slot.volunteers = [];
+                    }
+                    
+                    // Retirer le bénévole du tableau
+                    slot.volunteers = slot.volunteers.filter(v => v !== currentUser);
+                    
+                    // Pour compatibilité avec l'ancien système (nourrissages)
+                    if (slot.activity_type === 'Nourrissage') {
+                        slot.volunteer_name = null;
+                    }
+                    
+                    // Mettre à jour le statut
+                    if (slot.volunteers.length === 0) {
+                        slot.status = slot.is_urgent_when_free ? 'urgent' : 'available';
+                    }
+                    
+                    // Sauvegarder la position de scroll avant de re-rendre
+                    const scrollPositions = {};
+                    document.querySelectorAll('.overflow-x-auto').forEach((container, index) => {
+                        scrollPositions[index] = container.scrollLeft;
+                    });
+                    
+                    // Sauvegarder sur le serveur
+                    try {
+                        await axios.post('/api/schedule', schedule);
+                    } catch (saveError) {
+                        console.error('Save error:', saveError);
+                    }
+                    
+                    // Ajouter à l'historique
+                    actionHistory.addAction({
+                        type: 'unassign_slot',
+                        data: { slotId: slotId, user: currentUser },
+                        undoData: oldState
+                    });
+                    
+                    updateUndoRedoButtons();
+                    renderCalendar();
+                    
+                    // Restaurer les positions de scroll
+                    setTimeout(() => {
+                        document.querySelectorAll('.overflow-x-auto').forEach((container, index) => {
+                            if (scrollPositions[index] !== undefined) {
+                                container.scrollLeft = scrollPositions[index];
+                            }
+                        });
+                    }, 50);
+                    
+                    showError('Désinscription réussie', 'text-orange-600');
                 } catch (error) {
                     console.error('Erreur:', error);
                     showError("Erreur lors de la désinscription");
@@ -1413,281 +2143,409 @@ app.get('/', (c) => {
 
             async function adminAssignSlot(slotId) {
                 try {
-                    const volunteerName = prompt('Assigner ce créneau à qui ?');
+                    const volunteerName = prompt('Ajouter quelle personne à cette activité ?');
                     
                     if (!volunteerName || !volunteerName.trim()) return;
                     
                     const selectedVolunteer = volunteerName.trim();
                     
-                    const response = await axios.post('/api/schedule/' + slotId + '/assign', {
-                        volunteer_name: selectedVolunteer
-                    });
-
-                    if (response.data.success) {
-                        // Mettre à jour localement
-                        const slot = schedule.find(s => s.id == slotId);
-                        if (slot) {
-                            slot.volunteer_name = selectedVolunteer;
-                            slot.status = 'assigned';
-                        }
-                        
-                        // Ajouter à l'historique
-                        actionHistory.addAction({
-                            type: 'admin_assign_slot',
-                            data: { slotId: slotId, volunteer: selectedVolunteer, admin: currentUser },
-                            undoData: { slotId: slotId, previousVolunteer: null }
-                        });
-                        
-                        updateUndoRedoButtons();
-                        renderCalendar();
-                        showError(selectedVolunteer + ' assigné au créneau', 'text-green-600');
-                    } else {
-                        showError('Erreur: ' + response.data.error);
+                    const slot = schedule.find(s => s.id == slotId);
+                    if (!slot) {
+                        showError('Créneau non trouvé');
+                        return;
                     }
+                    
+                    // Initialiser le tableau si nécessaire
+                    if (!slot.volunteers) {
+                        slot.volunteers = [];
+                    }
+                    
+                    // Vérifier si la personne est déjà inscrite
+                    if (slot.volunteers.includes(selectedVolunteer)) {
+                        showError(selectedVolunteer + ' est déjà inscrit à cette activité');
+                        return;
+                    }
+                    
+                    // Vérifier la limite
+                    const maxVolunteers = slot.activity_type === 'Nourrissage' ? 1 : 15;
+                    if (slot.volunteers.length >= maxVolunteers) {
+                        showError('Cette activité est complète (' + maxVolunteers + ' personnes max)');
+                        return;
+                    }
+                    
+                    // Sauvegarder l'état avant pour l'historique
+                    const previousVolunteers = [...slot.volunteers];
+                    
+                    // Ajouter le bénévole au tableau
+                    slot.volunteers.push(selectedVolunteer);
+                    
+                    // Pour compatibilité avec l'ancien système (nourrissages)
+                    if (slot.activity_type === 'Nourrissage') {
+                        slot.volunteer_name = selectedVolunteer;
+                    }
+                    
+                    slot.status = 'assigned';
+                    
+                    // Sauvegarder sur le serveur
+                    try {
+                        await axios.post('/api/schedule', schedule);
+                    } catch (saveError) {
+                        console.error('Save error:', saveError);
+                    }
+                    
+                    // Ajouter à l'historique
+                    actionHistory.addAction({
+                        type: 'admin_assign_slot',
+                        data: { slotId: slotId, volunteer: selectedVolunteer, admin: currentUser },
+                        undoData: { slotId: slotId, previousVolunteers: previousVolunteers }
+                    });
+                    
+                    updateUndoRedoButtons();
+                    renderCalendar();
+                    showError(selectedVolunteer + " ajouté à l'activité", 'text-green-600');
                 } catch (error) {
                     console.error('Erreur:', error);
-                    showError('Erreur lors de assignation admin');
+                    showError("Erreur lors de l'assignation admin");
                 }
             }
 
             async function adminUnassignSlot(slotId) {
                 try {
                     const slot = schedule.find(s => s.id == slotId);
-                    if (!slot) return;
-                    
-                    if (!confirm('Retirer ' + slot.volunteer_name + ' de ce créneau ?')) return;
-                    
-                    const oldVolunteer = slot.volunteer_name;
-                    
-                    const response = await axios.post('/api/schedule/' + slotId + '/unassign', {});
-
-                    if (response.data.success) {
-                        // Mettre à jour localement
-                        slot.volunteer_name = null;
-                        slot.status = 'available';
-                        
-                        // Ajouter à l'historique
-                        actionHistory.addAction({
-                            type: 'admin_unassign_slot',
-                            data: { slotId: slotId, admin: currentUser },
-                            undoData: { slotId: slotId, previousVolunteer: oldVolunteer }
-                        });
-                        
-                        updateUndoRedoButtons();
-                        renderCalendar();
-                        showError(oldVolunteer + ' retiré du créneau', 'text-orange-600');
-                    } else {
-                        showError('Erreur: ' + response.data.error);
+                    if (!slot) {
+                        showError('Créneau non trouvé');
+                        return;
                     }
+                    
+                    // Si pas de bénévoles inscrits
+                    if (!slot.volunteers || slot.volunteers.length === 0) {
+                        showError('Aucun bénévole inscrit à cette activité');
+                        return;
+                    }
+                    
+                    // Si un seul bénévole, le retirer directement
+                    let volunteerToRemove;
+                    if (slot.volunteers.length === 1) {
+                        volunteerToRemove = slot.volunteers[0];
+                        if (!confirm('Retirer ' + volunteerToRemove + ' de ce créneau ?')) return;
+                    } else {
+                        // Si plusieurs bénévoles, demander lequel retirer
+                        const volunteersList = slot.volunteers.join(', ');
+                        volunteerToRemove = prompt("Retirer quelle personne ?\\n\\nInscrits actuellement: " + volunteersList);
+                        
+                        if (!volunteerToRemove || !volunteerToRemove.trim()) return;
+                        
+                        volunteerToRemove = volunteerToRemove.trim();
+                        
+                        // Vérifier que la personne est bien inscrite
+                        if (!slot.volunteers.includes(volunteerToRemove)) {
+                            showError(volunteerToRemove + " n'est pas inscrit à cette activité");
+                            return;
+                        }
+                    }
+                    
+                    // Sauvegarder l'état avant pour l'historique
+                    const previousVolunteers = [...slot.volunteers];
+                    
+                    // Retirer le bénévole du tableau
+                    slot.volunteers = slot.volunteers.filter(v => v !== volunteerToRemove);
+                    
+                    // Pour compatibilité avec l'ancien système (nourrissages)
+                    if (slot.activity_type === 'Nourrissage') {
+                        slot.volunteer_name = null;
+                    }
+                    
+                    // Mettre à jour le statut
+                    if (slot.volunteers.length === 0) {
+                        slot.status = slot.is_urgent_when_free ? 'urgent' : 'available';
+                    }
+                    
+                    // Sauvegarder sur le serveur
+                    try {
+                        await axios.post('/api/schedule', schedule);
+                    } catch (saveError) {
+                        console.error('Save error:', saveError);
+                    }
+                    
+                    // Ajouter à l'historique
+                    actionHistory.addAction({
+                        type: 'admin_unassign_slot',
+                        data: { slotId: slotId, volunteer: volunteerToRemove, admin: currentUser },
+                        undoData: { slotId: slotId, previousVolunteers: previousVolunteers }
+                    });
+                    
+                    updateUndoRedoButtons();
+                    renderCalendar();
+                    showError(volunteerToRemove + " retiré de l'activité", 'text-orange-600');
                 } catch (error) {
                     console.error('Erreur:', error);
                     showError('Erreur lors du retrait admin');
                 }
             }
 
-            async function adminChangeSlot(slotId) {
+            async function deleteActivity(slotId) {
+                if (!isAdminMode) {
+                    showError('Seuls les administrateurs peuvent supprimer des activités');
+                    return;
+                }
+                
                 try {
                     const slot = schedule.find(s => s.id == slotId);
-                    if (!slot) return;
-                    
-                    const volunteerName = prompt('Changer ' + slot.volunteer_name + ' pour qui ?');
-                    
-                    if (!volunteerName || !volunteerName.trim()) return;
-                    
-                    const selectedVolunteer = volunteerName.trim();
-                    
-                    if (selectedVolunteer === slot.volunteer_name) {
-                        showError('Même bénévole sélectionné');
+                    if (!slot) {
+                        showError('Activité non trouvée');
                         return;
                     }
                     
-                    const oldVolunteer = slot.volunteer_name;
-                    
-                    const response = await axios.post('/api/schedule/' + slotId + '/assign', {
-                        volunteer_name: selectedVolunteer
-                    });
-
-                    if (response.data.success) {
-                        // Mettre à jour localement
-                        slot.volunteer_name = selectedVolunteer;
-                        slot.status = 'assigned';
-                        
-                        // Ajouter à l'historique
-                        actionHistory.addAction({
-                            type: 'admin_change_slot',
-                            data: { slotId: slotId, newVolunteer: selectedVolunteer, admin: currentUser },
-                            undoData: { slotId: slotId, previousVolunteer: oldVolunteer }
-                        });
-                        
-                        updateUndoRedoButtons();
-                        renderCalendar();
-                        showError('Créneau changé de ' + oldVolunteer + ' à ' + selectedVolunteer, 'text-blue-600');
-                    } else {
-                        showError('Erreur: ' + response.data.error);
+                    // Empêcher la suppression des activités de nourrissage
+                    if (slot.activity_type === 'Nourrissage') {
+                        showError('Impossible de supprimer les activités de nourrissage');
+                        return;
                     }
+                    
+                    const activityDesc = slot.activity_type + ' du ' + formatDate(slot.date);
+                    
+                    if (!confirm("Supprimer définitivement cette activité : " + activityDesc + " ?")) {
+                        return;
+                    }
+                    
+                    // Sauvegarder l'activité pour l'historique (undo)
+                    const deletedActivity = { ...slot };
+                    
+                    // Supprimer l'activité du planning
+                    schedule = schedule.filter(s => s.id !== slotId);
+                    
+                    // Sauvegarder sur le serveur
+                    await axios.post('/api/schedule', schedule);
+                    console.log('✅ Activity deletion saved to server');
+                    
+                    // Recharger depuis le serveur pour synchroniser
+                    const response = await axios.get('/api/schedule');
+                    schedule = response.data;
+                    
+                    // Ajouter à l'historique
+                    actionHistory.addAction({
+                        type: 'delete_activity',
+                        data: { 
+                            slotId: slotId, 
+                            activityType: slot.activity_type,
+                            date: slot.date,
+                            user: currentUser 
+                        },
+                        undoData: { deletedActivity: deletedActivity }
+                    });
+                    
+                    updateUndoRedoButtons();
+                    renderCalendar();
+                    
+                    showError('Activité "' + activityDesc + '" supprimée', 'text-red-600');
+                    
                 } catch (error) {
                     console.error('Erreur:', error);
-                    showError('Erreur lors du changement admin');
+                    showError("Erreur lors de la suppression de l'activité");
                 }
             }
 
             async function toggleUrgentSlot(slotId) {
+                if (!isAdminMode) {
+                    showError('Seuls les administrateurs peuvent marquer les créneaux comme urgents');
+                    return;
+                }
+                
                 try {
                     const slot = schedule.find(s => s.id == slotId);
-                    if (!slot) return;
+                    if (!slot) {
+                        showError('Créneau non trouvé');
+                        return;
+                    }
                     
+                    // Déterminer l'état actuel
                     const wasUrgent = slot.status === 'urgent' || slot.is_urgent_when_free;
                     const newUrgentState = !wasUrgent;
                     
-                    // Mettre à jour le statut
+                    // Mettre à jour l'état
                     if (newUrgentState) {
+                        // Marquer comme urgent
                         slot.is_urgent_when_free = true;
-                        if (!slot.volunteer_name) {
+                        // Si le créneau est libre, changer le statut
+                        if (!slot.volunteers || slot.volunteers.length === 0) {
                             slot.status = 'urgent';
                         }
                     } else {
+                        // Retirer l'urgence
                         slot.is_urgent_when_free = false;
-                        if (slot.status === 'urgent' && !slot.volunteer_name) {
+                        // Si le créneau est libre et était urgent, le passer en disponible
+                        if (slot.status === 'urgent' && (!slot.volunteers || slot.volunteers.length === 0)) {
                             slot.status = 'available';
                         }
+                    }
+                    
+                    // Sauvegarder sur le serveur
+                    try {
+                        await axios.post('/api/schedule', schedule);
+                    } catch (saveError) {
+                        console.error('Save error:', saveError);
                     }
                     
                     // Ajouter à l'historique
                     actionHistory.addAction({
                         type: 'toggle_urgent',
-                        data: { slotId: slotId, newState: newUrgentState, admin: currentUser },
+                        data: { 
+                            slotId: slotId, 
+                            newState: newUrgentState, 
+                            activityType: slot.activity_type,
+                            date: slot.date,
+                            admin: currentUser 
+                        },
                         undoData: { slotId: slotId, oldState: wasUrgent }
                     });
                     
                     updateUndoRedoButtons();
                     renderCalendar();
                     
-                    const statusText = newUrgentState ? 'marqué comme urgent' : 'retiré de urgent';
+                    const statusText = newUrgentState ? 'marqué comme urgent' : 'retiré du mode urgent';
                     showError('Créneau ' + statusText, 'text-blue-600');
                     
                 } catch (error) {
                     console.error('Erreur:', error);
-                    showError('Erreur lors du changement urgent');
+                    showError("Erreur lors du changement d'urgence");
                 }
             }
 
             // === FONCTIONS GESTION SEMAINES ===
 
-            function addNewWeek() {
+            async function addNewWeek() {
                 if (!isAdminMode) return;
                 
                 try {
-                    // Calculer les semaines existantes et détecter les "trous"
-                    const existingWeekIndexes = [...new Set(schedule.map(slot => Math.floor(slot.id / 20)))];
-                    const maxWeek = existingWeekIndexes.length > 0 ? Math.max(...existingWeekIndexes) : -1;
+                    // Trouver toutes les dates uniques et les trier
+                    const uniqueDates = [...new Set(schedule.map(slot => slot.date))].sort();
+                    const firstDateStr = uniqueDates[0];
+                    const lastDateStr = uniqueDates[uniqueDates.length - 1];
                     
-                    // Chercher le premier "trou" dans la séquence de semaines
-                    let newWeekIndex = null;
-                    for (let i = 4; i <= maxWeek; i++) { // Commencer après les 4 semaines protégées
-                        if (!existingWeekIndexes.includes(i)) {
-                            newWeekIndex = i;
-                            break;
+                    // Détecter les semaines manquantes dans le planning existant
+                    const missingWeeks = [];
+                    const firstDate = new Date(firstDateStr);
+                    const lastDate = new Date(lastDateStr);
+                    
+                    // Obtenir le lundi de la première semaine
+                    const firstMonday = new Date(firstDate);
+                    const firstDayOfWeek = firstDate.getDay();
+                    const daysToFirstMonday = firstDayOfWeek === 0 ? -6 : -(firstDayOfWeek - 1);
+                    firstMonday.setDate(firstDate.getDate() + daysToFirstMonday);
+                    
+                    // Parcourir toutes les semaines entre la première et la dernière
+                    let currentMonday = new Date(firstMonday);
+                    while (currentMonday <= lastDate) {
+                        const mondayStr = currentMonday.toISOString().split('T')[0];
+                        
+                        // Vérifier si cette semaine a au moins une activité
+                        const weekHasActivities = schedule.some(slot => {
+                            const slotDate = new Date(slot.date);
+                            const slotMonday = new Date(slotDate);
+                            const slotDayOfWeek = slotDate.getDay();
+                            const daysToMonday = slotDayOfWeek === 0 ? -6 : -(slotDayOfWeek - 1);
+                            slotMonday.setDate(slotDate.getDate() + daysToMonday);
+                            
+                            return slotMonday.toISOString().split('T')[0] === mondayStr;
+                        });
+                        
+                        if (!weekHasActivities) {
+                            missingWeeks.push(new Date(currentMonday));
                         }
+                        
+                        // Passer à la semaine suivante
+                        currentMonday.setDate(currentMonday.getDate() + 7);
                     }
                     
-                    // Si aucun trou trouvé, ajouter à la fin
-                    if (newWeekIndex === null) {
-                        newWeekIndex = maxWeek + 1;
+                    // Déterminer quelle semaine ajouter
+                    let targetMonday;
+                    let message;
+                    
+                    if (missingWeeks.length > 0) {
+                        // Il y a des semaines manquantes : remplir la première
+                        targetMonday = missingWeeks[0];
+                        message = 'Semaine manquante remplie (' + targetMonday.toISOString().split('T')[0] + ')';
+                        console.log('Remplissage de semaine manquante:', targetMonday.toISOString().split('T')[0]);
+                    } else {
+                        // Pas de semaines manquantes : ajouter après la dernière
+                        const dayOfWeek = lastDate.getDay();
+                        let daysToAdd;
+                        
+                        if (dayOfWeek === 0) { // Dimanche
+                            daysToAdd = 1;
+                        } else { // Lundi à Samedi
+                            daysToAdd = 8 - dayOfWeek;
+                        }
+                        
+                        targetMonday = new Date(lastDate);
+                        targetMonday.setDate(lastDate.getDate() + daysToAdd);
+                        message = 'Nouvelle semaine ajoutée à la fin';
+                        console.log('Ajout de nouvelle semaine à la fin:', targetMonday.toISOString().split('T')[0]);
                     }
                     
-                    console.log('Ajout nouvelle semaine, index:', newWeekIndex);
-                    
-                    // Calculer la date de début de la nouvelle semaine
-                    const today = new Date();
-                    const currentMonday = new Date(today);
-                    currentMonday.setDate(today.getDate() - today.getDay() + 1);
-                    
-                    // Récupérer les activités légumes de la semaine précédente pour les copier
-                    const previousWeekIndex = newWeekIndex - 1;
-                    const previousWeekVegetables = schedule.filter(slot => 
-                        Math.floor(slot.id / 20) === previousWeekIndex && 
-                        slot.activity_type === 'Légumes'
-                    );
-                    
-                    // Générer les activités pour la nouvelle semaine
+                    // Générer les activités pour la semaine
                     const newActivities = [];
                     
                     for (let day = 0; day < 7; day++) {
-                        const date = new Date(currentMonday);
-                        date.setDate(currentMonday.getDate() + (newWeekIndex * 7) + day);
+                        const date = new Date(targetMonday);
+                        date.setDate(targetMonday.getDate() + day);
                         const dateStr = date.toISOString().split('T')[0];
+                        const dayOfWeek = day + 1;
                         
-                        // Nourrissage quotidien - TOUJOURS NON-URGENT pour semaines vierges
-                        const nourrissageId = newWeekIndex * 20 + day + 1;
-                        
+                        // Nourrissage quotidien
                         const nourrissageActivity = {
-                            id: nourrissageId,
                             date: dateStr,
-                            day_of_week: day + 1,
+                            day_of_week: dayOfWeek,
+                            time: null,
                             activity_type: 'Nourrissage',
-                            volunteer_name: null,  // Toujours libre pour semaines vierges
-                            status: 'available',   // Toujours disponible
-                            color: '#dc3545',
-                            max_volunteers: 1,
+                            description: 'Nourrissage quotidien des animaux',
                             notes: '',
-                            is_urgent_when_free: false  // JAMAIS urgent pour semaines vierges
+                            volunteer_name: null,
+                            volunteers: [],
+                            status: 'free',
+                            is_urgent_when_free: false
                         };
                         
                         newActivities.push(nourrissageActivity);
-                        
-                        // Copier les légumes de la semaine précédente si ils existent
-                        const previousVegetableForDay = previousWeekVegetables.find(veg => 
-                            veg.day_of_week === (day + 1)
-                        );
-                        
-                        if (previousVegetableForDay) {
-                            const legumesActivity = {
-                                id: newWeekIndex * 20 + day + 10,
-                                date: dateStr,
-                                day_of_week: day + 1,
-                                activity_type: 'Légumes',
-                                volunteer_name: null,  // Toujours libre pour semaines vierges
-                                status: 'available',   // Toujours disponible
-                                color: '#ffc107',
-                                max_volunteers: previousVegetableForDay.max_volunteers || 2,
-                                notes: previousVegetableForDay.notes || '',
-                                time: previousVegetableForDay.time || '',
-                                is_urgent_when_free: false  // JAMAIS urgent pour semaines vierges
-                            };
-                            
-                            newActivities.push(legumesActivity);
-                        }
                     }
                     
-                    // Ajouter les nouvelles activités au planning
-                    schedule.push(...newActivities);
+                    // Sauvegarder dans D1
+                    await axios.post('/api/schedule', [...schedule, ...newActivities]);
                     
-                    // Ajouter à l'historique
+                    // Recharger le planning depuis le serveur
+                    const response = await axios.get('/api/schedule');
+                    const oldSchedule = schedule;
+                    schedule = response.data;
+                    
+                    // Trouver les IDs des nouvelles activités ajoutées
+                    const newActivityIds = newActivities.map(act => {
+                        // Trouver l'activité correspondante dans le nouveau schedule
+                        const matchingActivity = schedule.find(s => 
+                            s.date === act.date && 
+                            s.activity_type === act.activity_type &&
+                            !oldSchedule.some(old => old.id === s.id)
+                        );
+                        return matchingActivity ? matchingActivity.id : null;
+                    }).filter(id => id !== null);
+                    
+                    // Ajouter à l'historique pour l'undo
                     actionHistory.addAction({
                         type: 'add_new_week',
-                        data: { 
-                            weekIndex: newWeekIndex,
+                        data: {
                             activities: newActivities,
-                            admin: currentUser 
+                            user: currentUser,
+                            monday: targetMonday.toISOString().split('T')[0]
                         },
-                        undoData: { activitiesToRemove: newActivities.map(a => a.id) }
+                        undoData: {
+                            activitiesToRemove: newActivityIds
+                        }
                     });
                     
                     // Rafraîchir l'affichage
                     renderCalendar();
                     updateUndoRedoButtons();
                     
-                    const vegetablesCopied = newActivities.filter(a => a.activity_type === 'Légumes').length;
-                    const isRestoringGap = newWeekIndex <= maxWeek; // Si on ajoute dans un trou
-                    
-                    let message = isRestoringGap 
-                        ? 'Semaine ' + (newWeekIndex + 1) + ' restaurée (vierge) avec ' + newActivities.length + ' activités'
-                        : 'Nouvelle semaine ' + (newWeekIndex + 1) + ' ajoutée (vierge) avec ' + newActivities.length + ' activités';
-                        
-                    if (vegetablesCopied > 0) {
-                        message += ' - ' + vegetablesCopied + ' créneaux légumes copiés de la semaine précédente';
-                    }
-                    showError(message, 'text-green-600');
+                    showError(message + ' avec ' + newActivities.length + ' nourrissages', 'text-green-600');
                     
                 } catch (error) {
                     console.error('Erreur:', error);
@@ -1695,57 +2553,74 @@ app.get('/', (c) => {
                 }
             }
 
-            function deleteWeekRow(weekIndex) {
+            async function deleteWeekRow(weekIndex) {
                 if (!isAdminMode) {
                     showError('Seuls les administrateurs peuvent supprimer des semaines');
                     return;
                 }
                 
                 if (weekIndex < 4) {
-                    showError('Impossible de supprimer la semaine courante et les 3 semaines suivantes');
+                    showError('Impossible de supprimer les 4 premières semaines');
                     return;
                 }
                 
                 try {
-                    // Calculer les dates de la semaine à supprimer pour un message informatif
-                    const today = new Date();
-                    const currentMonday = new Date(today);
-                    currentMonday.setDate(today.getDate() - today.getDay() + 1);
-                    const weekStartDate = new Date(currentMonday);
-                    weekStartDate.setDate(currentMonday.getDate() + (weekIndex * 7));
-                    const weekEndDate = new Date(weekStartDate);
-                    weekEndDate.setDate(weekStartDate.getDate() + 6);
+                    // Grouper les activités par semaine
+                    const weekGroups = groupByWeeks(schedule);
                     
-                    const weekInfo = 'du ' + weekStartDate.getDate() + '/' + (weekStartDate.getMonth() + 1) + 
-                                   ' au ' + weekEndDate.getDate() + '/' + (weekEndDate.getMonth() + 1);
-                    
-                    if (!confirm('Supprimer définitivement la semaine ' + (weekIndex + 1) + ' (' + weekInfo + ') ?\\n\\nToutes les activités de cette semaine seront supprimées.')) {
+                    // Vérifier que weekIndex est valide
+                    if (weekIndex >= weekGroups.length) {
+                        showError('Semaine non trouvée');
                         return;
                     }
                     
-                    // Trouver toutes les activités de cette semaine
-                    const activitiesToDelete = schedule.filter(slot => Math.floor(slot.id / 20) === weekIndex);
+                    const weekToDelete = weekGroups[weekIndex];
                     
-                    if (activitiesToDelete.length === 0) {
-                        showError('Aucune activité trouvée pour cette semaine');
+                    // Trouver les dates min et max de cette semaine
+                    const datesInWeek = weekToDelete.map(slot => slot.date).sort();
+                    const firstDateStr = datesInWeek[0];
+                    const lastDateStr = datesInWeek[datesInWeek.length - 1];
+                    const firstDate = new Date(firstDateStr);
+                    const lastDate = new Date(lastDateStr);
+                    
+                    const weekInfo = 'du ' + firstDate.getDate() + '/' + (firstDate.getMonth() + 1) + 
+                                   ' au ' + lastDate.getDate() + '/' + (lastDate.getMonth() + 1);
+                    
+                    if (!confirm("Supprimer définitivement la semaine (" + weekInfo + ") ?\\n\\nToutes les activités de cette semaine seront supprimées.")) {
                         return;
                     }
                     
-                    // Sauvegarder les activités pour l'historique (undo)
-                    const deletedActivities = activitiesToDelete.map(activity => ({ ...activity }));
+                    // IDs des activités à supprimer
+                    const idsToDelete = weekToDelete.map(slot => slot.id);
                     
-                    // Supprimer toutes les activités de cette semaine du planning
-                    schedule = schedule.filter(slot => Math.floor(slot.id / 20) !== weekIndex);
+                    console.log('Suppression de', idsToDelete.length, 'activités, IDs:', idsToDelete);
                     
-                    // Ajouter à l'historique
+                    // Sauvegarder les activités pour l'undo
+                    const deletedActivities = weekToDelete.map(slot => ({...slot}));
+                    
+                    // Supprimer de la liste locale
+                    schedule = schedule.filter(slot => !idsToDelete.includes(slot.id));
+                    
+                    console.log('Nouvelles activités après suppression:', schedule.length);
+                    
+                    // Sauvegarder dans D1
+                    await axios.post('/api/schedule', schedule);
+                    
+                    // Recharger depuis le serveur
+                    const response = await axios.get('/api/schedule');
+                    schedule = response.data;
+                    
+                    console.log('Activités après rechargement:', schedule.length);
+                    
+                    // Ajouter à l'historique pour l'undo
                     actionHistory.addAction({
                         type: 'delete_week_row',
-                        data: { 
-                            weekIndex: weekIndex, 
-                            admin: currentUser,
-                            deletedCount: deletedActivities.length
+                        data: {
+                            weekIndex: weekIndex,
+                            user: currentUser,
+                            weekInfo: weekInfo
                         },
-                        undoData: { 
+                        undoData: {
                             deletedActivities: deletedActivities
                         }
                     });
@@ -1754,7 +2629,7 @@ app.get('/', (c) => {
                     renderCalendar();
                     updateUndoRedoButtons();
                     
-                    showError('Semaine ' + (weekIndex + 1) + ' supprimée (' + deletedActivities.length + ' activités)', 'text-red-600');
+                    showError('Semaine supprimée (' + idsToDelete.length + ' activités)', 'text-red-600');
                     
                 } catch (error) {
                     console.error('Erreur:', error);
@@ -1774,12 +2649,28 @@ app.get('/', (c) => {
                         // Supprimer les activités qui avaient été ajoutées
                         const activitiesToRemove = action.undoData.activitiesToRemove;
                         schedule = schedule.filter(slot => !activitiesToRemove.includes(slot.id));
+                        
+                        // Sauvegarder dans D1
+                        await axios.post('/api/schedule', schedule);
+                        
+                        // Recharger depuis le serveur
+                        const response = await axios.get('/api/schedule');
+                        schedule = response.data;
+                        
                         renderCalendar();
                         showError('Semaine supprimée (annulation)', 'text-orange-600');
                     } else if (action.type === 'delete_week_row' && action.undoData) {
                         // Restaurer les activités qui avaient été supprimées
                         const activitiesToRestore = action.undoData.deletedActivities;
                         schedule.push(...activitiesToRestore);
+                        
+                        // Sauvegarder dans D1
+                        await axios.post('/api/schedule', schedule);
+                        
+                        // Recharger depuis le serveur
+                        const response = await axios.get('/api/schedule');
+                        schedule = response.data;
+                        
                         renderCalendar();
                         showError('Semaine restaurée (annulation suppression)', 'text-orange-600');
                     } else if (action.type === 'add_activity' && action.undoData) {
@@ -1798,7 +2689,41 @@ app.get('/', (c) => {
                             renderCalendar();
                             showError('Modifications annulées', 'text-orange-600');
                         }
-                    // delete_activity undo handling removed
+                    } else if (action.type === 'delete_activity' && action.undoData) {
+                        // Restaurer l'activité qui avait été supprimée
+                        const deletedActivity = action.undoData.deletedActivity;
+                        schedule.push(deletedActivity);
+                        
+                        // Sauvegarder dans D1
+                        await axios.post('/api/schedule', schedule);
+                        
+                        // Recharger depuis le serveur
+                        const response = await axios.get('/api/schedule');
+                        schedule = response.data;
+                        
+                        renderCalendar();
+                        showError('Activité restaurée (annulation suppression)', 'text-orange-600');
+                    } else if (action.type === 'toggle_urgent' && action.undoData) {
+                        // Restaurer l'état urgent précédent
+                        const slotId = action.undoData.slotId;
+                        const oldState = action.undoData.oldState;
+                        const slot = schedule.find(s => s.id === slotId);
+                        if (slot) {
+                            slot.is_urgent_when_free = oldState;
+                            if (oldState) {
+                                if (!slot.volunteers || slot.volunteers.length === 0) {
+                                    slot.status = 'urgent';
+                                }
+                            } else {
+                                if (slot.status === 'urgent' && (!slot.volunteers || slot.volunteers.length === 0)) {
+                                    slot.status = 'available';
+                                }
+                            }
+                            await axios.post('/api/schedule', schedule);
+                            renderCalendar();
+                            const statusText = oldState ? 'rétabli en urgent' : 'rétabli en normal';
+                            showError('Créneau ' + statusText + ' (annulation)', 'text-orange-600');
+                        }
                     } else {
                         // Pour les autres types d'actions, juste afficher un message
                         showError('Action annulée: ' + action.type, 'text-orange-600');
@@ -1825,12 +2750,29 @@ app.get('/', (c) => {
                         // Restaurer les activités qui avaient été ajoutées
                         const activitiesToRestore = action.data.activities;
                         schedule.push(...activitiesToRestore);
+                        
+                        // Sauvegarder dans D1
+                        await axios.post('/api/schedule', schedule);
+                        
+                        // Recharger depuis le serveur
+                        const response = await axios.get('/api/schedule');
+                        schedule = response.data;
+                        
                         renderCalendar();
                         showError('Semaine restaurée (refait)', 'text-green-600');
                     } else if (action.type === 'delete_week_row' && action.data) {
                         // Refaire la suppression de semaine
-                        const weekIndex = action.data.weekIndex;
-                        schedule = schedule.filter(slot => Math.floor(slot.id / 20) !== weekIndex);
+                        const deletedActivities = action.undoData.deletedActivities;
+                        const idsToDelete = deletedActivities.map(slot => slot.id);
+                        schedule = schedule.filter(slot => !idsToDelete.includes(slot.id));
+                        
+                        // Sauvegarder dans D1
+                        await axios.post('/api/schedule', schedule);
+                        
+                        // Recharger depuis le serveur
+                        const response = await axios.get('/api/schedule');
+                        schedule = response.data;
+                        
                         renderCalendar();
                         showError('Semaine supprimée (refait)', 'text-red-600');
                     } else if (action.type === 'add_activity' && action.data) {
@@ -1849,7 +2791,41 @@ app.get('/', (c) => {
                             renderCalendar();
                             showError('Modifications restaurées (refait)', 'text-green-600');
                         }
-                    // delete_activity redo handling removed
+                    } else if (action.type === 'delete_activity' && action.data) {
+                        // Refaire la suppression d'activité
+                        const slotId = action.data.slotId;
+                        schedule = schedule.filter(s => s.id !== slotId);
+                        
+                        // Sauvegarder dans D1
+                        await axios.post('/api/schedule', schedule);
+                        
+                        // Recharger depuis le serveur
+                        const response = await axios.get('/api/schedule');
+                        schedule = response.data;
+                        
+                        renderCalendar();
+                        showError('Activité supprimée (refait)', 'text-red-600');
+                    } else if (action.type === 'toggle_urgent' && action.data) {
+                        // Refaire le toggle urgent
+                        const slotId = action.data.slotId;
+                        const newState = action.data.newState;
+                        const slot = schedule.find(s => s.id === slotId);
+                        if (slot) {
+                            slot.is_urgent_when_free = newState;
+                            if (newState) {
+                                if (!slot.volunteers || slot.volunteers.length === 0) {
+                                    slot.status = 'urgent';
+                                }
+                            } else {
+                                if (slot.status === 'urgent' && (!slot.volunteers || slot.volunteers.length === 0)) {
+                                    slot.status = 'available';
+                                }
+                            }
+                            await axios.post('/api/schedule', schedule);
+                            renderCalendar();
+                            const statusText = newState ? 'marqué comme urgent' : 'retiré du mode urgent';
+                            showError('Créneau ' + statusText + ' (refait)', 'text-green-600');
+                        }
                     } else {
                         // Pour les autres types d'actions, juste afficher un message
                         showError('Action restaurée: ' + action.type, 'text-green-600');
@@ -1890,6 +2866,63 @@ app.get('/', (c) => {
 
             // === FONCTIONS MODALES ===
 
+            function formatHistoryMessage(action) {
+                const user = action.data?.user || action.data?.admin || 'Utilisateur inconnu';
+                const date = action.data?.date ? new Date(action.data.date).toLocaleDateString('fr-FR') : '';
+                
+                switch(action.type) {
+                    case 'add_activity':
+                        return 'Activité "' + action.data.activity.activity_type + '" du ' + 
+                               new Date(action.data.activity.date).toLocaleDateString('fr-FR') + 
+                               ' ajoutée par ' + user;
+                    
+                    case 'delete_activity':
+                        return 'Activité "' + action.data.activityType + '" du ' + 
+                               new Date(action.data.date).toLocaleDateString('fr-FR') + 
+                               ' supprimée par ' + user;
+                    
+                    case 'modify_activity':
+                        return 'Activité modifiée par ' + user;
+                    
+                    case 'admin_assign_slot':
+                        return user + ' a assigné ' + action.data.volunteer + ' à un créneau';
+                    
+                    case 'admin_unassign_slot':
+                        return user + " a retiré " + action.undoData.previousVolunteer + " d'un créneau";
+                    
+                    case 'admin_change_slot':
+                        return user + ' a changé ' + action.undoData.previousVolunteer + 
+                               ' par ' + action.data.newVolunteer;
+                    
+                    case 'assign_slot':
+                        return user + " s'est inscrit à un créneau";
+                    
+                    case 'unassign_slot':
+                        return user + " s'est désinscrit d'un créneau";
+                    
+                    case 'add_new_week':
+                        return 'Semaine ' + (action.data.weekIndex + 1) + ' ajoutée par ' + user;
+                    
+                    case 'delete_week_row':
+                        return 'Semaine ' + (action.data.weekIndex + 1) + ' supprimée par ' + user;
+                    
+                    case 'admin_mode_enabled':
+                        return user + ' a activé le mode admin';
+                    
+                    case 'add_person':
+                        return 'Bénévole "' + action.data.person.name + '" ajouté par ' + user;
+                    
+                    case 'toggle_urgent':
+                        const urgentStatus = action.data.newState ? 'marqué comme urgent' : 'retiré du mode urgent';
+                        const activityInfo = action.data.activityType && action.data.date ? 
+                            ' "' + action.data.activityType + '" du ' + new Date(action.data.date).toLocaleDateString('fr-FR') : '';
+                        return 'Créneau' + activityInfo + ' ' + urgentStatus + ' par ' + user;
+                    
+                    default:
+                        return action.type + ' par ' + user;
+                }
+            }
+
             function openHistoryModal() {
                 const history = actionHistory.getHistory();
                 const historyList = document.getElementById('historyList');
@@ -1898,10 +2931,15 @@ app.get('/', (c) => {
                     historyList.innerHTML = '<p class="text-gray-500 text-center py-4">Aucun historique</p>';
                 } else {
                     historyList.innerHTML = history.map(action => {
-                        const timeStr = action.timestamp.toLocaleTimeString('fr-FR');
-                        return '<div class="p-3 bg-gray-50 rounded border">' +
-                            '<div class="font-medium">' + action.type + '</div>' +
-                            '<div class="text-sm text-gray-500">' + timeStr + '</div>' +
+                        const timeStr = action.timestamp.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                        const dateStr = action.timestamp.toLocaleDateString('fr-FR');
+                        const message = formatHistoryMessage(action);
+                        
+                        return '<div class="p-3 bg-gray-50 rounded border hover:bg-gray-100 transition-colors">' +
+                            '<div class="font-medium text-gray-800">' + message + '</div>' +
+                            '<div class="text-xs text-gray-500 mt-1">' +
+                            '<i class="fas fa-clock mr-1"></i>' + dateStr + ' à ' + timeStr +
+                            '</div>' +
                             '</div>';
                     }).join('');
                 }
@@ -1972,9 +3010,8 @@ app.get('/', (c) => {
                         type: activityType,
                         date: document.getElementById('activityDate').value,
                         time: activityTime,
-                        maxVolunteers: parseInt(document.getElementById('maxVolunteers').value),
-                        notes: document.getElementById('activityNotes').value.trim(),
-                        isUrgent: document.getElementById('isUrgent').checked
+                        maxVolunteers: 15,  // Limite par défaut à 15 personnes
+                        notes: document.getElementById('activityNotes').value.trim()
                     };
 
                     // Validation
@@ -1992,10 +3029,30 @@ app.get('/', (c) => {
                     const activityDate = new Date(formData.date);
                     const dayOfWeek = activityDate.getDay() === 0 ? 7 : activityDate.getDay(); // Dimanche = 7, Lundi = 1
                     
+                    // Vérifier que la date appartient à une semaine existante
+                    const selectedDate = new Date(formData.date);
+                    const selectedMonday = getMonday(selectedDate);
+                    const selectedMondayStr = selectedMonday.toISOString().split('T')[0];
+                    
+                    // Obtenir toutes les semaines existantes
+                    const existingWeeks = groupByWeeks(schedule);
+                    const existingMondayDates = existingWeeks.map(week => {
+                        const firstSlot = week[0];
+                        const slotDate = new Date(firstSlot.date);
+                        return getMonday(slotDate).toISOString().split('T')[0];
+                    });
+                    
+                    // Vérifier si la semaine de la date sélectionnée existe
+                    if (!existingMondayDates.includes(selectedMondayStr)) {
+                        showError("Impossible de créer une activité hors des semaines existantes. Veuillez d'abord ajouter la semaine correspondante.");
+                        return;
+                    }
+                    
                     // Générer un ID unique simple et sûr
-                    const baseId = Date.now();
-                    const randomSuffix = Math.floor(Math.random() * 1000);
-                    const newId = baseId + randomSuffix;
+                    // Trouver le plus grand ID existant et ajouter 1
+                    const existingIds = schedule.map(s => s.id);
+                    const maxId = existingIds.length > 0 ? Math.max(...existingIds) : 0;
+                    const newId = maxId + 1;
                     
                     // Créer la nouvelle activité
                     const newActivity = {
@@ -2004,11 +3061,12 @@ app.get('/', (c) => {
                         day_of_week: dayOfWeek,
                         activity_type: formData.type,
                         volunteer_name: null,
-                        status: formData.isUrgent ? 'urgent' : 'available',
+                        volunteers: [],  // Liste des bénévoles inscrits (pour multi-personnes)
+                        status: 'available',
                         max_volunteers: formData.maxVolunteers,
                         notes: formData.notes,
                         time: formData.time,
-                        is_urgent_when_free: formData.isUrgent,
+                        is_urgent_when_free: false,
                         color: getColorForActivityType(formData.type)
                     };
 
@@ -2125,9 +3183,7 @@ app.get('/', (c) => {
 
                 document.getElementById('modifyActivityDate').value = slot.date;
                 document.getElementById('modifyActivityTime').value = slot.time || '';
-                document.getElementById('modifyMaxVolunteers').value = slot.max_volunteers || 1;
                 document.getElementById('modifyActivityNotes').value = slot.notes || '';
-                document.getElementById('modifyIsUrgent').checked = slot.is_urgent_when_free || false;
 
                 // Ouvrir le modal
                 document.getElementById('modifyActivityModal').classList.remove('hidden');
@@ -2170,9 +3226,8 @@ app.get('/', (c) => {
                         type: activityType,
                         date: document.getElementById('modifyActivityDate').value,
                         time: activityTime,
-                        maxVolunteers: parseInt(document.getElementById('modifyMaxVolunteers').value),
-                        notes: document.getElementById('modifyActivityNotes').value.trim(),
-                        isUrgent: document.getElementById('modifyIsUrgent').checked
+                        maxVolunteers: 15,  // Limite par défaut à 15 personnes
+                        notes: document.getElementById('modifyActivityNotes').value.trim()
                     };
 
                     // Validation
@@ -2209,7 +3264,7 @@ app.get('/', (c) => {
                         time: formData.time,
                         max_volunteers: formData.maxVolunteers,
                         notes: formData.notes,
-                        is_urgent_when_free: formData.isUrgent,
+                        is_urgent_when_free: false,
                         color: getColorForActivityType(formData.type)
                     };
 
@@ -2245,8 +3300,6 @@ app.get('/', (c) => {
                     showError("Erreur lors de la modification de l'activité");
                 }
             }
-
-            // deleteActivity function removed to fix parsing error
 
             function getColorForActivityType(type) {
                 const colorMap = {
