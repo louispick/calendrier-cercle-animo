@@ -900,7 +900,8 @@ app.get('/', (c) => {
             let currentUser = null;
             let isAdminMode = false;
             let schedule = [];
-            let viewMode = 'calendar'; // 'calendar' ou 'table'
+            // Charger le mode de vue depuis localStorage ou utiliser 'table' par défaut (vue détaillée)
+            let viewMode = localStorage.getItem('viewMode') || 'table'; // 'calendar' ou 'table'
             let currentCalendarMonth = new Date(); // Mois affiché dans le calendrier
             let scrollPositions = {}; // Sauvegarder les positions de scroll
             
