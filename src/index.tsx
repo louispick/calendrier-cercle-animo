@@ -900,7 +900,8 @@ app.get('/', (c) => {
             let currentUser = null;
             let isAdminMode = false;
             let schedule = [];
-            // Charger le mode de vue depuis localStorage ou utiliser 'table' par défaut (vue détaillée)
+            // Vue par défaut: table (vue détaillée hebdomadaire)
+            // Charge la préférence depuis localStorage si elle existe
             let viewMode = localStorage.getItem('viewMode') || 'table'; // 'calendar' ou 'table'
             let currentCalendarMonth = new Date(); // Mois affiché dans le calendrier
             let scrollPositions = {}; // Sauvegarder les positions de scroll
@@ -969,6 +970,11 @@ app.get('/', (c) => {
             document.addEventListener('DOMContentLoaded', async () => {
                 console.log('🔄 DOMContentLoaded - début');
                 try {
+                    // Réinitialiser le mode de vue à 'table' temporairement pour corriger le problème
+                    // L'utilisateur pourra ensuite choisir sa préférence avec le bouton toggle
+                    localStorage.setItem('viewMode', 'table');
+                    viewMode = 'table';
+                    
                     console.log('📚 Chargement utilisateur...');
                     loadUserFromStorage();
                     console.log('🎯 Configuration event listeners...');
@@ -1452,6 +1458,10 @@ app.get('/', (c) => {
                     }
                     activitiesByDate[slot.date].push(slot);
                 });
+                
+                console.log('📅 Calendrier mensuel:', monthNames[currentMonth], currentYear);
+                console.log('📊 Total activités:', schedule.length);
+                console.log('🗓️ Dates avec activités:', Object.keys(activitiesByDate).sort());
                 
                 // Calculer les dates du mois
                 const firstDay = new Date(currentYear, currentMonth, 1);
