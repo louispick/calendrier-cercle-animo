@@ -606,30 +606,11 @@ app.get('/', (c) => {
                     Calendrier de nourrissage des animaux et activités de la ferme
                 </p>
                 
-                <div class="text-center mb-6">
-                    <div class="flex flex-wrap justify-center gap-2 lg:gap-4 text-sm">
-                        <div class="flex items-center gap-2">
-                            <div class="w-4 h-4 bg-green-600 border-2 border-green-700"></div>
-                            <span>🟢 Libre</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <div class="w-4 h-4 bg-blue-600 border-2 border-blue-700"></div>
-                            <span>🔵 Pris</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <div class="w-6 h-6 bg-yellow-400 border border-yellow-500 rounded-full flex items-center justify-center text-xs text-yellow-800 font-bold">!</div>
-                            <span>Créneau à prendre en priorité</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <div class="w-4 h-4" style="background-color: #ffc107;"></div>
-                            <span>🟡 Légumes</span>
-                        </div>
-                    </div>
-                </div>
+
             </header>
 
-            <!-- Méthode unique d'entrée du nom -->
-            <div class="bg-white rounded-lg shadow-md p-4 lg:p-6 mb-6">
+            <!-- Méthode unique d'entrée du nom (compact après validation) -->
+            <div id="nameInputContainer" class="bg-white rounded-lg shadow-md p-4 lg:p-6 mb-6">
                 <div class="max-w-md mx-auto">
                     <h2 class="text-xl font-semibold mb-4 text-center">
                         <i class="fas fa-user mr-2"></i>
@@ -920,6 +901,8 @@ app.get('/', (c) => {
             let isAdminMode = false;
             let schedule = [];
             let viewMode = 'calendar'; // 'calendar' ou 'table'
+            let currentCalendarMonth = new Date(); // Mois affiché dans le calendrier
+            let scrollPositions = {}; // Sauvegarder les positions de scroll
             
             // Classe pour gérer l'historique des actions
             class ActionHistory {
@@ -1016,6 +999,21 @@ app.get('/', (c) => {
                 currentUser = name;
                 updateNameStatus('Connecte en tant que: ' + name, 'text-green-600');
                 document.getElementById('loading').style.display = 'none';
+                
+                // Compacter l'encart du nom après validation pour libérer de l'espace
+                const nameContainer = document.getElementById('nameInputContainer');
+                if (nameContainer) {
+                    nameContainer.className = 'bg-white rounded-lg shadow p-2 mb-4';
+                    nameContainer.innerHTML = '<div class="flex items-center justify-between max-w-md mx-auto">' +
+                        '<div class="flex items-center gap-2">' +
+                            '<span class="text-sm font-medium text-gray-700">👤 ' + name + '</span>' +
+                        '</div>' +
+                        '<button onclick="editName()" class="text-xs px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded transition-colors">' +
+                            '<i class="fas fa-edit mr-1"></i>Modifier' +
+                        '</button>' +
+                    '</div>';
+                }
+                
                 renderCalendar();
             }
 
@@ -1023,6 +1021,48 @@ app.get('/', (c) => {
                 const statusDiv = document.getElementById('nameStatus');
                 statusDiv.textContent = message;
                 statusDiv.className = 'mt-2 text-sm text-center ' + className;
+            }
+            
+            function editName() {
+                // Restaurer le formulaire complet pour modifier le nom
+                const nameContainer = document.getElementById('nameInputContainer');
+                if (nameContainer) {
+                    nameContainer.className = 'bg-white rounded-lg shadow-md p-4 lg:p-6 mb-6';
+                    nameContainer.innerHTML = '<div class="max-w-md mx-auto">' +
+                        '<h2 class="text-xl font-semibold mb-4 text-center">' +
+                            '<i class="fas fa-user mr-2"></i>' +
+                            'Ton prénom' +
+                        '</h2>' +
+                        '<div class="flex gap-3">' +
+                            '<input ' +
+                                'type="text" ' +
+                                'id="userName" ' +
+                                'placeholder="Saisir ton prénom..." ' +
+                                'class="flex-1 px-4 py-3 text-lg border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"' +
+                                'maxlength="50"' +
+                                'autocomplete="name"' +
+                                'value="' + (currentUser || '') + '"' +
+                            '>' +
+                            '<button ' +
+                                'id="validateNameBtn" ' +
+                                'class="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"' +
+                            '>' +
+                                '<i class="fas fa-check mr-1"></i>' +
+                                'OK' +
+                            '</button>' +
+                        '</div>' +
+                        '<div id="nameStatus" class="mt-2 text-sm text-center"></div>' +
+                    '</div>';
+                    
+                    // Réattacher l'event listener
+                    document.getElementById('validateNameBtn').addEventListener('click', validateName);
+                    document.getElementById('userName').addEventListener('keypress', (e) => {
+                        if (e.key === 'Enter') validateName();
+                    });
+                    
+                    // Focus sur l'input
+                    document.getElementById('userName').focus();
+                }
             }
 
             async function loadSchedule() {
@@ -1288,7 +1328,19 @@ app.get('/', (c) => {
                 const container = document.createElement('div');
                 container.className = 'space-y-4';
                 
-                // Navigation mois + bouton toggle vue
+                // Bouton toggle mode (visible sur mobile et desktop) - EN PREMIER
+                const toggleDiv = document.createElement('div');
+                toggleDiv.className = 'bg-white rounded-lg shadow p-3';
+                
+                const toggleBtn = document.createElement('button');
+                toggleBtn.className = 'w-full px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg font-medium flex items-center justify-center gap-2 hover:from-indigo-700 hover:to-purple-700 transition-all';
+                toggleBtn.innerHTML = '<span>📊</span><span>Passer à la vue détaillée (tableau)</span>';
+                toggleBtn.addEventListener('click', toggleViewMode);
+                
+                toggleDiv.appendChild(toggleBtn);
+                container.appendChild(toggleDiv);
+                
+                // Navigation mois - ENSUITE
                 const navDiv = document.createElement('div');
                 navDiv.className = 'bg-white rounded-lg shadow p-4 flex items-center justify-between';
                 
@@ -1311,25 +1363,19 @@ app.get('/', (c) => {
                 navDiv.appendChild(nextBtn);
                 container.appendChild(navDiv);
                 
-                // Bouton toggle mode (visible sur mobile uniquement)
-                const toggleDiv = document.createElement('div');
-                toggleDiv.className = 'lg:hidden bg-white rounded-lg shadow p-3';
-                
-                const toggleBtn = document.createElement('button');
-                toggleBtn.className = 'w-full px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg font-medium flex items-center justify-center gap-2 hover:from-indigo-700 hover:to-purple-700 transition-all';
-                toggleBtn.innerHTML = '<span>📊</span><span>Passer à la vue détaillée (tableau)</span>';
-                toggleBtn.addEventListener('click', toggleViewMode);
-                
-                toggleDiv.appendChild(toggleBtn);
-                container.appendChild(toggleDiv);
-                
                 // Calendrier mensuel
                 const calendarContainer = document.createElement('div');
                 calendarContainer.className = 'bg-white rounded-lg shadow p-4';
                 calendarContainer.id = 'monthlyCalendar';
                 container.appendChild(calendarContainer);
                 
-                // Légende
+                // Stats semaine - EN PREMIER
+                const statsDiv = document.createElement('div');
+                statsDiv.className = 'bg-white rounded-lg shadow p-4';
+                statsDiv.id = 'weekStats';
+                container.appendChild(statsDiv);
+                
+                // Légende - ENSUITE
                 const legendDiv = document.createElement('div');
                 legendDiv.className = 'bg-white rounded-lg shadow p-4 text-sm';
                 legendDiv.innerHTML = '<div class="font-semibold mb-3 text-gray-800">Légende :</div>' +
@@ -1347,6 +1393,10 @@ app.get('/', (c) => {
                             '<span class="text-gray-700">Créneaux URGENTS</span>' +
                         '</div>' +
                         '<div class="flex items-center gap-2">' +
+                            '<div class="w-4 h-4 bg-green-200 border-2 border-green-400 rounded flex items-center justify-center text-xs">🥕</div>' +
+                            '<span class="text-gray-700">Récup légumes</span>' +
+                        '</div>' +
+                        '<div class="flex items-center gap-2">' +
                             '<div class="w-4 h-4 bg-orange-300 border-2 border-orange-500 rounded flex items-center justify-center text-xs">🎉</div>' +
                             '<span class="text-gray-700">Événements spéciaux</span>' +
                         '</div>' +
@@ -1356,12 +1406,6 @@ app.get('/', (c) => {
                     '</div>';
                 container.appendChild(legendDiv);
                 
-                // Stats semaine
-                const statsDiv = document.createElement('div');
-                statsDiv.className = 'bg-white rounded-lg shadow p-4';
-                statsDiv.id = 'weekStats';
-                container.appendChild(statsDiv);
-                
                 calendar.appendChild(container);
                 
                 // Générer le calendrier
@@ -1369,9 +1413,30 @@ app.get('/', (c) => {
             }
             
             function generateMonthlyCalendar() {
-                const today = new Date();
-                const currentMonth = today.getMonth();
-                const currentYear = today.getFullYear();
+                const currentMonth = currentCalendarMonth.getMonth();
+                const currentYear = currentCalendarMonth.getFullYear();
+                
+                // Fonction locale pour obtenir le lundi d'une date (en string YYYY-MM-DD)
+                const getMondayLocal = (dateStr) => {
+                    const parts = dateStr.split('-');
+                    const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+                    const day = d.getDay();
+                    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+                    d.setDate(diff);
+                    const year = d.getFullYear();
+                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                    const dayNum = String(d.getDate()).padStart(2, '0');
+                    return year + '-' + month + '-' + dayNum;
+                };
+                
+                // Vérifier quelles semaines existent dans le schedule
+                const existingMondays = new Set();
+                schedule.forEach(slot => {
+                    const monday = getMondayLocal(slot.date);
+                    existingMondays.add(monday);
+                });
+                
+                console.log('Semaines existantes:', Array.from(existingMondays));
                 
                 // Mettre à jour le titre
                 const monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 
@@ -1411,42 +1476,68 @@ app.get('/', (c) => {
                 
                 // Jours du mois
                 for (let day = 1; day <= daysInMonth; day++) {
-                    const date = new Date(currentYear, currentMonth, day);
-                    const dateStr = date.toISOString().split('T')[0];
+                    // Construire la date en string directement pour éviter les problèmes de timezone
+                    const dateStr = currentYear + '-' + String(currentMonth + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
                     const activities = activitiesByDate[dateStr] || [];
                     
+                    // Vérifier si la semaine de ce jour existe
+                    const mondayStr = getMondayLocal(dateStr);
+                    const weekExists = existingMondays.has(mondayStr);
+                    
                     const dayDiv = document.createElement('button');
-                    dayDiv.className = 'aspect-square flex flex-col items-center justify-center border-2 rounded-lg p-1 hover:shadow-lg transition-all';
+                    dayDiv.className = 'aspect-square flex flex-col items-center justify-center border-2 rounded-lg p-1 transition-all';
+                    
+                    if (!weekExists) {
+                        // Semaine n'existe pas - griser et désactiver
+                        dayDiv.className += ' bg-gray-100 border-gray-300 text-gray-400 cursor-not-allowed opacity-50';
+                        dayDiv.disabled = true;
+                    } else {
+                        dayDiv.className += ' hover:shadow-lg';
+                    }
                     
                     // Compter les types d'activités
                     let hasUrgent = false;
-                    let hasFree = false;
-                    let hasTaken = false;
+                    let hasFreeNourrissage = false;
+                    let hasTakenNourrissage = false;
                     let hasEvent = false;
+                    let hasLegumes = false;
                     
                     activities.forEach(act => {
-                        if (act.is_urgent_when_free || act.status === 'urgent') {
+                        const isNourrissage = act.activity_type === 'Nourrissage';
+                        const isLegumes = act.activity_type === 'Légumes';
+                        const volunteers = act.volunteers || [];
+                        const isFree = volunteers.length === 0;
+                        
+                        // Marquer comme urgent UNIQUEMENT si libre ET marqué urgent
+                        if ((act.is_urgent_when_free || act.status === 'urgent') && isFree) {
                             hasUrgent = true;
-                        } else if (act.activity_type !== 'Nourrissage' && act.volunteers && act.volunteers.length > 0) {
-                            hasEvent = true;
-                        } else if (act.volunteers && act.volunteers.length > 0) {
-                            hasTaken = true;
+                        }
+                        
+                        if (isNourrissage) {
+                            if (isFree) {
+                                hasFreeNourrissage = true;
+                            } else {
+                                hasTakenNourrissage = true;
+                            }
+                        } else if (isLegumes) {
+                            hasLegumes = true;
                         } else {
-                            hasFree = true;
+                            // Tous les autres types d'activités sont des événements (Réunion, Nettoyage, Autre, etc.)
+                            hasEvent = true;
                         }
                     });
                     
-                    // Appliquer le style selon la priorité
-                    if (hasUrgent) {
-                        dayDiv.className += ' bg-yellow-100 border-yellow-400 animate-pulse';
-                    } else if (hasEvent) {
-                        dayDiv.className += ' bg-orange-100 border-orange-400';
-                    } else if (hasFree) {
-                        dayDiv.className += ' bg-blue-100 border-blue-300';
-                    } else if (hasTaken) {
-                        dayDiv.className += ' bg-gray-300 border-gray-500';
-                    } else {
-                        dayDiv.className += ' border-gray-200';
+                    // Appliquer le style selon la priorité (seulement si la semaine existe)
+                    if (weekExists) {
+                        if (hasUrgent) {
+                            dayDiv.className += ' bg-yellow-100 border-yellow-400 animate-pulse';
+                        } else if (hasFreeNourrissage) {
+                            dayDiv.className += ' bg-blue-100 border-blue-300';
+                        } else if (hasTakenNourrissage) {
+                            dayDiv.className += ' bg-gray-300 border-gray-500';
+                        } else {
+                            dayDiv.className += ' border-gray-200';
+                        }
                     }
                     
                     // Contenu du jour
@@ -1454,21 +1545,42 @@ app.get('/', (c) => {
                     daySpan.className = 'text-sm font-medium ' + (hasUrgent ? 'text-red-700 font-bold' : 'text-gray-800');
                     daySpan.textContent = day.toString();
                     
+                    // Afficher TOUTES les icônes pertinentes (seulement si semaine existe)
                     const iconsDiv = document.createElement('div');
                     iconsDiv.className = 'flex flex-wrap gap-0.5 mt-1 justify-center';
-                    if (hasUrgent) {
-                        iconsDiv.innerHTML = '<span class="text-xs">⚠️</span>';
-                    } else if (hasEvent) {
-                        iconsDiv.innerHTML = '<span class="text-xs">🎉</span>';
-                    } else if (hasFree) {
-                        iconsDiv.innerHTML = '<span class="text-xs">⭕</span>';
-                    } else if (hasTaken) {
-                        iconsDiv.innerHTML = '<span class="text-xs">✓</span>';
+                    let iconsHtml = '';
+                    
+                    if (weekExists) {
+                        // Icône de nourrissage (prioritaire)
+                        if (hasUrgent) {
+                            iconsHtml += '<span class="text-xs">⚠️</span>';
+                        } else if (hasFreeNourrissage) {
+                            iconsHtml += '<span class="text-xs">⭕</span>';
+                        } else if (hasTakenNourrissage) {
+                            iconsHtml += '<span class="text-xs">✓</span>';
+                        }
+                        
+                        // Icône légumes/récup (carotte)
+                        if (hasLegumes) {
+                            iconsHtml += '<span class="text-xs">🥕</span>';
+                        }
+                        
+                        // Icône événement spécial
+                        if (hasEvent) {
+                            iconsHtml += '<span class="text-xs">🎉</span>';
+                        }
                     }
+                    
+                    iconsDiv.innerHTML = iconsHtml;
                     
                     dayDiv.appendChild(daySpan);
                     dayDiv.appendChild(iconsDiv);
-                    dayDiv.onclick = () => openDayModal(dateStr, activities);
+                    
+                    // Ouvrir la modal seulement si la semaine existe
+                    if (weekExists) {
+                        dayDiv.onclick = () => openDayModal(dateStr, activities);
+                    }
+                    
                     calendarDays.appendChild(dayDiv);
                 }
                 
@@ -1489,9 +1601,13 @@ app.get('/', (c) => {
                 schedule.forEach(slot => {
                     const slotDate = new Date(slot.date);
                     if (slotDate >= monday && slotDate <= sundayDate) {
-                        if (slot.is_urgent_when_free || slot.status === 'urgent') {
+                        const hasVolunteers = slot.volunteers && slot.volunteers.length > 0;
+                        const isUrgent = slot.is_urgent_when_free || slot.status === 'urgent';
+                        
+                        // Un créneau est urgent UNIQUEMENT s'il est libre ET marqué urgent
+                        if (isUrgent && !hasVolunteers) {
                             urgentCount++;
-                        } else if (slot.volunteers && slot.volunteers.length > 0) {
+                        } else if (hasVolunteers) {
                             takenCount++;
                         } else {
                             freeCount++;
@@ -1551,25 +1667,26 @@ app.get('/', (c) => {
                         let statusText = '⭕ Libre';
                         let buttonHtml = '';
                         
-                        if (isUrgent) {
+                        // Urgent UNIQUEMENT si libre ET marqué urgent
+                        if (isUrgent && isFree) {
                             bgColor = 'bg-yellow-50 border-yellow-400';
                             statusText = '⚠️ URGENT - Personne inscrit';
-                            buttonHtml = '<button onclick="assignSlot(' + slot.id + '); document.querySelector(\'.fixed\').remove();" class="w-full px-4 py-2 bg-red-500 text-white rounded font-bold hover:bg-red-600">Je m\\'inscris !</button>';
+                            buttonHtml = '<button onclick="assignSlot(' + slot.id + '); document.querySelector(\\'.fixed\\').remove();" class="w-full px-4 py-2 bg-red-500 text-white rounded font-bold hover:bg-red-600">Je m\\\'inscris !</button>';
                         } else if (isUserRegistered) {
                             bgColor = 'bg-gray-100 border-gray-400';
-                            statusText = '✓ Vous êtes inscrit';
-                            buttonHtml = '<button onclick="unassignSlot(' + slot.id + '); document.querySelector(\'.fixed\').remove();" class="w-full px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">Me désinscrire</button>';
+                            statusText = '✓ Vous êtes inscrit - ' + volunteers.join(', ') + (isNourrissage ? '' : ' (' + volunteers.length + '/' + maxVolunteers + ')');
+                            buttonHtml = '<button onclick="unassignSlot(' + slot.id + '); document.querySelector(\\'.fixed\\').remove();" class="w-full px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">Me désinscrire</button>';
                         } else if (isFull) {
                             bgColor = 'bg-gray-200 border-gray-400';
-                            statusText = '✓ Complet (' + volunteers.length + '/' + maxVolunteers + ')';
+                            statusText = '✓ Complet - ' + volunteers.join(', ') + ' (' + volunteers.length + '/' + maxVolunteers + ')';
                         } else if (!isFree) {
                             bgColor = 'bg-gray-50 border-gray-300';
                             statusText = '👤 ' + volunteers.join(', ') + (isNourrissage ? '' : ' (' + volunteers.length + '/' + maxVolunteers + ')');
                             if (!isFull) {
-                                buttonHtml = '<button onclick="assignSlot(' + slot.id + '); document.querySelector(\'.fixed\').remove();" class="w-full px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">M\\'inscrire aussi</button>';
+                                buttonHtml = '<button onclick="assignSlot(' + slot.id + '); document.querySelector(\\'.fixed\\').remove();" class="w-full px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">M\\\'inscrire aussi</button>';
                             }
                         } else {
-                            buttonHtml = '<button onclick="assignSlot(' + slot.id + '); document.querySelector(\\.fixed\\').remove();" class="w-full px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">M\\'inscrire</button>';
+                            buttonHtml = '<button onclick="assignSlot(' + slot.id + '); document.querySelector(\\'.fixed\\').remove();" class="w-full px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">M\\\'inscrire</button>';
                         }
                         
                         activitiesHtml += '<div class="border-l-4 ' + bgColor + ' p-3 rounded mb-3">' +
@@ -1586,7 +1703,7 @@ app.get('/', (c) => {
                             '<h2 class="font-bold text-lg">' + dayName + '</h2>' +
                             '<p class="text-sm opacity-90">' + formattedDate + '</p>' +
                         '</div>' +
-                        '<button onclick="this.closest(\'.fixed\').remove()" class="text-3xl hover:bg-white hover:bg-opacity-20 rounded px-2">×</button>' +
+                        '<button onclick="this.closest(\\'.fixed\\').remove()" class="text-3xl hover:bg-white hover:bg-opacity-20 rounded px-2">×</button>' +
                     '</div>' +
                     '<div class="p-4">' +
                         activitiesHtml +
@@ -1597,8 +1714,10 @@ app.get('/', (c) => {
             }
             
             function changeMonth(direction) {
-                // TODO: Implémenter la navigation entre mois
-                console.log('Navigation mois:', direction);
+                // Changer le mois affiché
+                currentCalendarMonth = new Date(currentCalendarMonth.getFullYear(), currentCalendarMonth.getMonth() + direction, 1);
+                // Régénérer le calendrier
+                generateMonthlyCalendar();
             }
             
             function toggleViewMode() {
@@ -1612,12 +1731,19 @@ app.get('/', (c) => {
             
             function renderTableView() {
                 console.log('Rendu du calendrier en mode tableau pour:', currentUser);
+                
+                // Sauvegarder les positions de scroll avant de re-render
+                const containers = document.querySelectorAll('.overflow-x-auto');
+                containers.forEach((container, index) => {
+                    scrollPositions['table_' + index] = container.scrollLeft;
+                });
+                
                 const calendar = document.getElementById('calendar');
                 calendar.innerHTML = '';
                 
-                // Bouton toggle mode (visible sur mobile uniquement)
+                // Bouton toggle mode (visible sur mobile et desktop)
                 const toggleDiv = document.createElement('div');
-                toggleDiv.className = 'lg:hidden bg-white rounded-lg shadow p-3 mb-4';
+                toggleDiv.className = 'bg-white rounded-lg shadow p-3 mb-4';
                 
                 const toggleBtn = document.createElement('button');
                 toggleBtn.className = 'w-full px-4 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-medium flex items-center justify-center gap-2 hover:from-purple-700 hover:to-indigo-700 transition-all';
@@ -1826,6 +1952,17 @@ app.get('/', (c) => {
                 if (isAdminMode) {
                     initEventDelegation();
                 }
+                
+                // Restaurer les positions de scroll après le render (setTimeout pour attendre le DOM)
+                setTimeout(() => {
+                    const newContainers = document.querySelectorAll('.overflow-x-auto');
+                    newContainers.forEach((container, index) => {
+                        const savedPosition = scrollPositions['table_' + index];
+                        if (savedPosition !== undefined) {
+                            container.scrollLeft = savedPosition;
+                        }
+                    });
+                }, 0);
             }
 
             function renderSlot(slot) {
@@ -1846,13 +1983,13 @@ app.get('/', (c) => {
                 
                 if (slot.activity_type.toLowerCase().includes('nourrissage')) {
                     // Pour le nourrissage : bleu si pris, vert si libre
-                    // Les créneaux urgents sont TOUJOURS verts + pictogramme (même si pris)
+                    // Badge urgent UNIQUEMENT si le créneau est libre
                     if (slot.volunteer_name) {
-                        // Créneau pris : bleu normal, mais peut avoir le badge urgent
+                        // Créneau pris : bleu normal, SANS badge urgent (quelqu'un est inscrit)
                         statusClass = 'status-assigned'; // Bleu
-                        showUrgentBadge = slot.is_urgent_when_free; // Montrer le badge si urgent même quand pris
+                        showUrgentBadge = false; // Pas de badge urgent quand quelqu'un est inscrit
                     } else {
-                        // Créneau libre : vert, avec ou sans badge selon urgence
+                        // Créneau libre : vert, avec badge urgent si marqué comme urgent
                         statusClass = 'status-available'; // Toujours vert pour les créneaux libres
                         showUrgentBadge = slot.status === 'urgent' || slot.is_urgent_when_free;
                     }
@@ -2038,7 +2175,10 @@ app.get('/', (c) => {
                         slot.volunteer_name = currentUser;
                     }
                     
+                    // Mettre à jour le statut : si c'était urgent, retirer le statut urgent
+                    // car maintenant quelqu'un est inscrit
                     slot.status = 'assigned';
+                    // Ne pas retirer is_urgent_when_free car on veut le garder pour la réinscription
                     
                     // Sauvegarder la position de scroll avant de re-rendre
                     const scrollPositions = {};
