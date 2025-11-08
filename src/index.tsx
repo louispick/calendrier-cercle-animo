@@ -709,14 +709,14 @@ app.get('/', (c) => {
           
           /* Fond d'écran fixe avec image des chèvres */
           body {
-            background-image: url('https://page.gensparksite.com/v1/base64_upload/00c1123a4a1e8c5224e838bb48b6667b');
+            background-image: url('https://page.gensparksite.com/v1/base64_upload/4f478e7ec73b3e6176c7d99f3d825222');
             background-size: cover;
             background-position: center;
             background-repeat: no-repeat;
             background-attachment: fixed; /* L'image reste fixe pendant le scroll */
           }
           
-          /* Ajouter une légère opacité blanche sur le contenu pour améliorer la lisibilité */
+          /* Overlay blanc réduit pour mieux voir l'image */
           body::before {
             content: '';
             position: fixed;
@@ -724,7 +724,7 @@ app.get('/', (c) => {
             left: 0;
             right: 0;
             bottom: 0;
-            background-color: rgba(255, 255, 255, 0.85); /* Overlay blanc semi-transparent */
+            background-color: rgba(255, 255, 255, 0.4); /* Overlay blanc plus transparent pour mieux voir l'image */
             z-index: -1;
           }
           
