@@ -1768,37 +1768,36 @@ app.get('/', (c) => {
                 const sundayDate = new Date(monday);
                 sundayDate.setDate(monday.getDate() + 6);
                 
-                let takenCount = 0;      // Créneaux avec des inscrits
-                let toTakeCount = 0;     // Créneaux à prendre (libres + urgents)
-                let urgentCount = 0;     // Créneaux urgents non pris
+                let toTakeCount = 0;     // Créneaux à prendre (libres)
+                let urgentCount = 0;     // Créneaux urgents
+                let eventCount = 0;      // Événements (Réunion, Autre)
                 
                 schedule.forEach(slot => {
                     const slotDate = new Date(slot.date);
                     if (slotDate >= monday && slotDate <= sundayDate) {
                         const hasVolunteers = slot.volunteers && slot.volunteers.length > 0;
                         const isUrgent = slot.is_urgent_when_free || slot.status === 'urgent';
+                        const isEvent = slot.activity_type === 'Réunion' || slot.activity_type === 'Autre';
                         
-                        if (hasVolunteers) {
-                            // Créneau pris (quelqu'un s'est inscrit)
-                            takenCount++;
-                        } else {
-                            // Créneau libre (personne n'est inscrit)
+                        // Compter les événements (Réunion, Autre)
+                        if (isEvent) {
+                            eventCount++;
+                        }
+                        
+                        // Compter les créneaux à prendre (sans inscrits)
+                        if (!hasVolunteers) {
                             toTakeCount++;
-                            
-                            // Si en plus il est marqué urgent
-                            if (isUrgent) {
-                                urgentCount++;
-                            }
+                        }
+                        
+                        // Compter les urgents (qu'ils soient pris ou non)
+                        if (isUrgent) {
+                            urgentCount++;
                         }
                     }
                 });
                 
                 const statsHtml = '<div class="font-semibold mb-3 text-gray-800">Cette semaine :</div>' +
                     '<div class="grid grid-cols-3 gap-3">' +
-                        '<div class="text-center p-3 bg-gray-50 rounded-lg border border-gray-300">' +
-                            '<div class="text-2xl font-bold text-gray-700">' + takenCount + '</div>' +
-                            '<div class="text-xs text-gray-600 mt-1">Créneaux pris</div>' +
-                        '</div>' +
                         '<div class="text-center p-3 bg-blue-50 rounded-lg border border-blue-200">' +
                             '<div class="text-2xl font-bold text-blue-600">' + toTakeCount + '</div>' +
                             '<div class="text-xs text-gray-600 mt-1">À prendre</div>' +
@@ -1806,6 +1805,10 @@ app.get('/', (c) => {
                         '<div class="text-center p-3 bg-yellow-50 rounded-lg border border-yellow-300">' +
                             '<div class="text-2xl font-bold text-red-600">' + urgentCount + '</div>' +
                             '<div class="text-xs text-gray-600 mt-1">Urgents ⚠️</div>' +
+                        '</div>' +
+                        '<div class="text-center p-3 bg-purple-50 rounded-lg border border-purple-300">' +
+                            '<div class="text-2xl font-bold text-purple-600">' + eventCount + '</div>' +
+                            '<div class="text-xs text-gray-600 mt-1">Événements 🎉</div>' +
                         '</div>' +
                     '</div>';
                 document.getElementById('weekStats').innerHTML = statsHtml;
