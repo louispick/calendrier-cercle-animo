@@ -2174,6 +2174,40 @@ app.get('/', (c) => {
                     calendar.appendChild(addWeekDiv);
                 }
                 
+                // Légende en bas pour la vue tableau
+                const legendDiv = document.createElement('div');
+                legendDiv.className = 'bg-white rounded-lg shadow p-4 text-sm mt-6';
+                legendDiv.innerHTML = '<div class="font-semibold mb-3 text-gray-800">Légende :</div>' +
+                    '<div class="grid grid-cols-2 md:grid-cols-3 gap-3">' +
+                        '<div class="flex items-center gap-2">' +
+                            '<div class="w-6 h-6 rounded" style="background-color: #16a34a; border: 2px solid #15803d;"></div>' +
+                            '<span class="text-gray-700">Nourrissage libre</span>' +
+                        '</div>' +
+                        '<div class="flex items-center gap-2">' +
+                            '<div class="w-6 h-6 rounded" style="background-color: #1e40af; border: 2px solid #1e3a8a;"></div>' +
+                            '<span class="text-gray-700">Nourrissage pris</span>' +
+                        '</div>' +
+                        '<div class="flex items-center gap-2">' +
+                            '<div class="w-6 h-6 rounded relative" style="background-color: #16a34a; border: 2px solid #15803d;">' +
+                                '<div class="absolute -top-1 -right-1 w-4 h-4 bg-yellow-400 rounded-full flex items-center justify-center text-xs">!</div>' +
+                            '</div>' +
+                            '<span class="text-gray-700">Urgent</span>' +
+                        '</div>' +
+                        '<div class="flex items-center gap-2">' +
+                            '<div class="w-6 h-6 rounded" style="background-color: #ffc107; border: 2px solid #e0a800;"></div>' +
+                            '<span class="text-gray-700">Légumes</span>' +
+                        '</div>' +
+                        '<div class="flex items-center gap-2">' +
+                            '<div class="w-6 h-6 rounded" style="background-color: #6f42c1; border: 2px solid #5a32a3;"></div>' +
+                            '<span class="text-gray-700">Réunion</span>' +
+                        '</div>' +
+                        '<div class="flex items-center gap-2">' +
+                            '<div class="w-6 h-6 rounded" style="background-color: #17a2b8; border: 2px solid #138496;"></div>' +
+                            '<span class="text-gray-700">Autre</span>' +
+                        '</div>' +
+                    '</div>';
+                calendar.appendChild(legendDiv);
+                
                 // Initialiser la délégation d'événements pour optimiser les performances
                 if (isAdminMode) {
                     initEventDelegation();
