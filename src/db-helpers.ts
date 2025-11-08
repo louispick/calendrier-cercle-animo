@@ -166,6 +166,101 @@ export async function replaceSchedule(db: D1Database, schedule: any[]): Promise<
   return true;
 }
 
+// ===== BACKUP FUNCTIONS =====
+
+export interface Backup {
+  id: number;
+  backup_data: string; // JSON stringifié
+  created_at: string;
+  backup_type: string;
+  description: string | null;
+  item_count: number;
+}
+
+// Créer un backup automatique du schedule complet
+export async function createBackup(
+  db: D1Database, 
+  schedule: any[], 
+  backupType: string = 'auto',
+  description: string | null = null
+): Promise<number> {
+  const backupData = JSON.stringify(schedule);
+  const itemCount = schedule.length;
+  
+  const result = await db.prepare(`
+    INSERT INTO backups (backup_data, backup_type, description, item_count)
+    VALUES (?, ?, ?, ?)
+  `).bind(backupData, backupType, description, itemCount).run();
+  
+  console.log(`💾 Backup créé: type=${backupType}, items=${itemCount}, id=${result.meta.last_row_id}`);
+  return result.meta.last_row_id || 0;
+}
+
+// Récupérer tous les backups (limité aux 50 derniers)
+export async function getAllBackups(db: D1Database, limit: number = 50): Promise<Backup[]> {
+  const result = await db.prepare(`
+    SELECT id, created_at, backup_type, description, item_count,
+           LENGTH(backup_data) as data_size
+    FROM backups 
+    ORDER BY created_at DESC 
+    LIMIT ?
+  `).bind(limit).all();
+  
+  return result.results as any[];
+}
+
+// Récupérer un backup spécifique par ID
+export async function getBackupById(db: D1Database, backupId: number): Promise<any[] | null> {
+  const result = await db.prepare(`
+    SELECT backup_data FROM backups WHERE id = ?
+  `).bind(backupId).first();
+  
+  if (!result) return null;
+  
+  try {
+    return JSON.parse((result as any).backup_data);
+  } catch (error) {
+    console.error('❌ Erreur parsing backup:', error);
+    return null;
+  }
+}
+
+// Restaurer un backup (remplace le schedule actuel)
+export async function restoreBackup(db: D1Database, backupId: number): Promise<boolean> {
+  const backupData = await getBackupById(db, backupId);
+  
+  if (!backupData) {
+    console.error('❌ Backup non trouvé:', backupId);
+    return false;
+  }
+  
+  // Créer un backup du state actuel avant de restaurer
+  const currentSchedule = await getAllSchedule(db);
+  await createBackup(db, currentSchedule, 'pre_restore', `Backup automatique avant restauration du backup #${backupId}`);
+  
+  // Restaurer les données du backup
+  await replaceSchedule(db, backupData);
+  
+  console.log(`✅ Backup #${backupId} restauré avec succès (${backupData.length} items)`);
+  return true;
+}
+
+// Nettoyer les vieux backups (garder seulement les N derniers)
+export async function cleanOldBackups(db: D1Database, keepCount: number = 100): Promise<number> {
+  const result = await db.prepare(`
+    DELETE FROM backups 
+    WHERE id NOT IN (
+      SELECT id FROM backups ORDER BY created_at DESC LIMIT ?
+    )
+  `).bind(keepCount).run();
+  
+  const deleted = result.meta.changes;
+  if (deleted > 0) {
+    console.log(`🗑️ ${deleted} ancien(s) backup(s) supprimé(s)`);
+  }
+  return deleted;
+}
+
 // Initialize database with default schedule if empty
 export async function initializeScheduleIfEmpty(db: D1Database): Promise<void> {
   const count = await db.prepare('SELECT COUNT(*) as count FROM schedule').first();

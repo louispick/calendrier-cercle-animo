@@ -1,0 +1,7 @@
+name = "calendrier-animaux"
+compatibility_date = "2024-10-27"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "calendrier-animaux-production"
+database_id = "0df65a54-6d17-4ec8-8a75-8848a6fe1c75"

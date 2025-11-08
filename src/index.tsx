@@ -8,7 +8,12 @@ import {
   updateScheduleSlot, 
   deleteScheduleSlot, 
   replaceSchedule,
-  initializeScheduleIfEmpty 
+  initializeScheduleIfEmpty,
+  createBackup,
+  getAllBackups,
+  getBackupById,
+  restoreBackup,
+  cleanOldBackups
 } from './db-helpers'
 
 type Bindings = {
@@ -272,8 +277,15 @@ app.post('/api/schedule', async (c) => {
       return c.json({ error: 'Le planning doit être un tableau' }, 400);
     }
     
+    // PROTECTION: Créer un backup automatique AVANT de sauvegarder
+    const currentSchedule = await getAllSchedule(db);
+    await createBackup(db, currentSchedule, 'auto', 'Backup automatique avant modification');
+    
     // Sauvegarder le planning complet dans D1
     await replaceSchedule(db, newSchedule);
+    
+    // Nettoyer les vieux backups (garder les 100 derniers)
+    await cleanOldBackups(db, 100);
     
     console.log('💾 Planning sauvegardé dans D1 - count:', newSchedule.length);
     return c.json({ 
@@ -292,6 +304,10 @@ app.post('/api/reset-database', async (c) => {
   try {
     const db = c.env.DB;
     
+    // PROTECTION: Backup avant reset
+    const currentSchedule = await getAllSchedule(db);
+    await createBackup(db, currentSchedule, 'pre_reset', 'Backup avant réinitialisation complète');
+    
     // Clear all data
     await db.prepare('DELETE FROM schedule').run();
     
@@ -308,6 +324,84 @@ app.post('/api/reset-database', async (c) => {
   } catch (error) {
     console.error('❌ Erreur reset:', error);
     return c.json({ error: 'Échec de la réinitialisation: ' + error.message }, 500);
+  }
+});
+
+// API - Liste des backups disponibles
+app.get('/api/backups', async (c) => {
+  try {
+    const db = c.env.DB;
+    const backups = await getAllBackups(db, 50);
+    
+    return c.json({ 
+      success: true, 
+      backups: backups 
+    });
+  } catch (error) {
+    console.error('❌ Erreur récupération backups:', error);
+    return c.json({ error: 'Échec récupération backups: ' + error.message }, 500);
+  }
+});
+
+// API - Créer un backup manuel
+app.post('/api/backups/create', async (c) => {
+  try {
+    const db = c.env.DB;
+    const body = await c.req.json();
+    const description = body.description || 'Backup manuel';
+    
+    const currentSchedule = await getAllSchedule(db);
+    const backupId = await createBackup(db, currentSchedule, 'manual', description);
+    
+    return c.json({ 
+      success: true, 
+      message: 'Backup créé avec succès',
+      backupId: backupId,
+      itemCount: currentSchedule.length
+    });
+  } catch (error) {
+    console.error('❌ Erreur création backup:', error);
+    return c.json({ error: 'Échec création backup: ' + error.message }, 500);
+  }
+});
+
+// API - Restaurer un backup
+app.post('/api/backups/:id/restore', async (c) => {
+  try {
+    const db = c.env.DB;
+    const backupId = parseInt(c.req.param('id'));
+    
+    const success = await restoreBackup(db, backupId);
+    
+    if (!success) {
+      return c.json({ error: 'Backup non trouvé ou invalide' }, 404);
+    }
+    
+    const restoredSchedule = await getAllSchedule(db);
+    
+    return c.json({ 
+      success: true, 
+      message: 'Backup restauré avec succès',
+      count: restoredSchedule.length
+    });
+  } catch (error) {
+    console.error('❌ Erreur restauration backup:', error);
+    return c.json({ error: 'Échec restauration: ' + error.message }, 500);
+  }
+});
+
+// API - Exporter le schedule actuel en JSON
+app.get('/api/export', async (c) => {
+  try {
+    const db = c.env.DB;
+    const schedule = await getAllSchedule(db);
+    
+    return c.json(schedule, 200, {
+      'Content-Disposition': `attachment; filename="calendrier-animo-export-${new Date().toISOString().split('T')[0]}.json"`
+    });
+  } catch (error) {
+    console.error('❌ Erreur export:', error);
+    return c.json({ error: 'Échec export: ' + error.message }, 500);
   }
 });
 
