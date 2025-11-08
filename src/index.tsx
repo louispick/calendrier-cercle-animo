@@ -1566,24 +1566,24 @@ app.get('/', (c) => {
                 legendDiv.innerHTML = '<div class="font-semibold mb-3 text-gray-800">Légende :</div>' +
                     '<div class="grid grid-cols-2 gap-3">' +
                         '<div class="flex items-center gap-2">' +
-                            '<div class="w-4 h-4 bg-blue-200 border-2 border-blue-400 rounded flex items-center justify-center text-xs">⭕</div>' +
-                            '<span class="text-gray-700">Créneaux libres</span>' +
+                            '<div class="w-4 h-4 bg-green-100 border-2 border-green-400 rounded flex items-center justify-center text-xs">⭕</div>' +
+                            '<span class="text-gray-700">Nourrissage libre</span>' +
                         '</div>' +
                         '<div class="flex items-center gap-2">' +
-                            '<div class="w-4 h-4 bg-gray-600 border-2 border-gray-800 rounded flex items-center justify-center text-white text-xs font-bold">✓</div>' +
-                            '<span class="text-gray-700">Créneaux pris</span>' +
+                            '<div class="w-4 h-4 bg-blue-200 border-2 border-blue-500 rounded flex items-center justify-center text-white text-xs font-bold">✓</div>' +
+                            '<span class="text-gray-700">Nourrissage pris</span>' +
                         '</div>' +
                         '<div class="flex items-center gap-2">' +
-                            '<div class="w-4 h-4 bg-yellow-300 border-2 border-yellow-500 rounded flex items-center justify-center text-xs">⚠️</div>' +
-                            '<span class="text-gray-700">Créneaux URGENTS</span>' +
+                            '<div class="w-4 h-4 bg-yellow-100 border-2 border-yellow-400 rounded flex items-center justify-center text-xs">⚠️</div>' +
+                            '<span class="text-gray-700">URGENT</span>' +
                         '</div>' +
                         '<div class="flex items-center gap-2">' +
                             '<div class="w-4 h-4 bg-green-200 border-2 border-green-400 rounded flex items-center justify-center text-xs">🥕</div>' +
-                            '<span class="text-gray-700">Récup légumes</span>' +
+                            '<span class="text-gray-700">Légumes</span>' +
                         '</div>' +
                         '<div class="flex items-center gap-2">' +
-                            '<div class="w-4 h-4 bg-orange-300 border-2 border-orange-500 rounded flex items-center justify-center text-xs">🎉</div>' +
-                            '<span class="text-gray-700">Événements spéciaux</span>' +
+                            '<div class="w-4 h-4 bg-purple-100 border-2 border-purple-300 rounded flex items-center justify-center text-xs">🎉</div>' +
+                            '<span class="text-gray-700">Événements</span>' +
                         '</div>' +
                     '</div>' +
                     '<div class="mt-3 text-xs text-gray-600 bg-blue-50 p-2 rounded">' +
@@ -1728,9 +1728,11 @@ app.get('/', (c) => {
                         if (hasUrgent) {
                             dayDiv.className += ' bg-yellow-100 border-yellow-400 animate-pulse';
                         } else if (hasFreeNourrissage) {
-                            dayDiv.className += ' bg-blue-100 border-blue-300';
+                            // Nourrissage libre = VERT (comme dans la vue détaillée)
+                            dayDiv.className += ' bg-green-100 border-green-400';
                         } else if (hasTakenNourrissage) {
-                            dayDiv.className += ' bg-gray-300 border-gray-500';
+                            // Nourrissage pris = BLEU FONCÉ (comme dans la vue détaillée)
+                            dayDiv.className += ' bg-blue-200 border-blue-500';
                         } else {
                             dayDiv.className += ' border-gray-200';
                         }
