@@ -1805,7 +1805,7 @@ app.get('/', (c) => {
                         if (isUrgent && isFree) {
                             bgColor = 'bg-yellow-50 border-yellow-400';
                             statusText = '⚠️ URGENT - Personne inscrit';
-                            buttonHtml = '<button onclick="assignSlotAndCloseModal(' + slot.id + ')" class="w-full px-4 py-2 bg-red-500 text-white rounded font-bold hover:bg-red-600">Je m\'inscris !</button>';
+                            buttonHtml = '<button onclick="assignSlotAndCloseModal(' + slot.id + ')" class="w-full px-4 py-2 bg-red-500 text-white rounded font-bold hover:bg-red-600">Je veux participer !</button>';
                         } else if (isUserRegistered) {
                             bgColor = 'bg-gray-100 border-gray-400';
                             statusText = '✓ Vous êtes inscrit - ' + volunteers.join(', ') + (isNourrissage ? '' : ' (' + volunteers.length + '/' + maxVolunteers + ')');
@@ -1817,10 +1817,10 @@ app.get('/', (c) => {
                             bgColor = 'bg-gray-50 border-gray-300';
                             statusText = '👤 ' + volunteers.join(', ') + (isNourrissage ? '' : ' (' + volunteers.length + '/' + maxVolunteers + ')');
                             if (!isFull) {
-                                buttonHtml = '<button onclick="assignSlotAndCloseModal(' + slot.id + ')" class="w-full px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">M\'inscrire aussi</button>';
+                                buttonHtml = '<button onclick="assignSlotAndCloseModal(' + slot.id + ')" class="w-full px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Participer aussi</button>';
                             }
                         } else {
-                            buttonHtml = '<button onclick="assignSlotAndCloseModal(' + slot.id + ')" class="w-full px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">M\'inscrire</button>';
+                            buttonHtml = '<button onclick="assignSlotAndCloseModal(' + slot.id + ')" class="w-full px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Participer</button>';
                         }
                         
                         activitiesHtml += '<div class="border-l-4 ' + bgColor + ' p-3 rounded mb-3">' +
