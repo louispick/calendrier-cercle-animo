@@ -1579,11 +1579,18 @@ app.get('/', (c) => {
                     calendarDays.appendChild(emptyDiv);
                 }
                 
+                // Date du jour pour la surbrillance
+                const today = new Date();
+                const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+                
                 // Jours du mois
                 for (let day = 1; day <= daysInMonth; day++) {
                     // Construire la date en string directement pour éviter les problèmes de timezone
                     const dateStr = currentYear + '-' + String(currentMonth + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
                     const activities = activitiesByDate[dateStr] || [];
+                    
+                    // Vérifier si c'est aujourd'hui
+                    const isToday = dateStr === todayStr;
                     
                     // Vérifier si la semaine de ce jour existe
                     const mondayStr = getMondayLocal(dateStr);
@@ -1642,6 +1649,11 @@ app.get('/', (c) => {
                             dayDiv.className += ' bg-gray-300 border-gray-500';
                         } else {
                             dayDiv.className += ' border-gray-200';
+                        }
+                        
+                        // Surbrillance du jour actuel avec bordure épaisse et fond distinct
+                        if (isToday) {
+                            dayDiv.className += ' !border-4 !border-indigo-600 ring-2 ring-indigo-300 bg-gradient-to-br from-indigo-50 to-purple-50';
                         }
                     }
                     
