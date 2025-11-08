@@ -627,10 +627,29 @@ app.get('/', (c) => {
           
           /* Améliorations tactiles */
           @media (hover: none) and (pointer: coarse) {
+            /* Tous les éléments dans les cellules du tableau permettent le scroll */
+            .week-table td * {
+              touch-action: pan-x pan-y; /* Permet le scroll horizontal et vertical */
+            }
+            
             .draggable-slot {
               padding: 0.75rem !important;
               min-height: 80px;
-              touch-action: none;
+              touch-action: pan-x pan-y; /* Permet le scroll horizontal et vertical par défaut */
+            }
+            
+            /* Boutons dans les slots : ne pas bloquer le scroll */
+            .draggable-slot button {
+              touch-action: manipulation; /* Permet le scroll tout en gardant les clics */
+            }
+            
+            /* En mode admin, désactiver le scroll pour permettre le drag-and-drop */
+            .admin-draggable {
+              touch-action: none !important;
+            }
+            
+            .admin-draggable * {
+              touch-action: none !important;
             }
             
             .draggable-slot:active {
