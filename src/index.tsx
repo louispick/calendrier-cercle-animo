@@ -1768,9 +1768,9 @@ app.get('/', (c) => {
                 const sundayDate = new Date(monday);
                 sundayDate.setDate(monday.getDate() + 6);
                 
-                let freeCount = 0;
-                let takenCount = 0;
-                let urgentCount = 0;
+                let takenCount = 0;      // Créneaux avec des inscrits
+                let toTakeCount = 0;     // Créneaux à prendre (libres + urgents)
+                let urgentCount = 0;     // Créneaux urgents non pris
                 
                 schedule.forEach(slot => {
                     const slotDate = new Date(slot.date);
@@ -1778,26 +1778,30 @@ app.get('/', (c) => {
                         const hasVolunteers = slot.volunteers && slot.volunteers.length > 0;
                         const isUrgent = slot.is_urgent_when_free || slot.status === 'urgent';
                         
-                        // Un créneau est urgent UNIQUEMENT s'il est libre ET marqué urgent
-                        if (isUrgent && !hasVolunteers) {
-                            urgentCount++;
-                        } else if (hasVolunteers) {
+                        if (hasVolunteers) {
+                            // Créneau pris (quelqu'un s'est inscrit)
                             takenCount++;
                         } else {
-                            freeCount++;
+                            // Créneau libre (personne n'est inscrit)
+                            toTakeCount++;
+                            
+                            // Si en plus il est marqué urgent
+                            if (isUrgent) {
+                                urgentCount++;
+                            }
                         }
                     }
                 });
                 
                 const statsHtml = '<div class="font-semibold mb-3 text-gray-800">Cette semaine :</div>' +
                     '<div class="grid grid-cols-3 gap-3">' +
-                        '<div class="text-center p-3 bg-blue-50 rounded-lg border border-blue-200">' +
-                            '<div class="text-2xl font-bold text-blue-600">' + freeCount + '</div>' +
-                            '<div class="text-xs text-gray-600 mt-1">Créneaux libres</div>' +
-                        '</div>' +
                         '<div class="text-center p-3 bg-gray-50 rounded-lg border border-gray-300">' +
                             '<div class="text-2xl font-bold text-gray-700">' + takenCount + '</div>' +
                             '<div class="text-xs text-gray-600 mt-1">Créneaux pris</div>' +
+                        '</div>' +
+                        '<div class="text-center p-3 bg-blue-50 rounded-lg border border-blue-200">' +
+                            '<div class="text-2xl font-bold text-blue-600">' + toTakeCount + '</div>' +
+                            '<div class="text-xs text-gray-600 mt-1">À prendre</div>' +
                         '</div>' +
                         '<div class="text-center p-3 bg-yellow-50 rounded-lg border border-yellow-300">' +
                             '<div class="text-2xl font-bold text-red-600">' + urgentCount + '</div>' +
