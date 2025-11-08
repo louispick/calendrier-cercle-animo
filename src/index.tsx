@@ -1077,8 +1077,9 @@ app.get('/', (c) => {
                     await loadSchedule();
                     console.log('✅ Application chargée avec succès');
                     
+                    // DÉSACTIVÉ TEMPORAIREMENT - Causait la perte de données
                     // Démarrer l'auto-refresh toutes les 15 secondes pour voir les changements des autres
-                    startAutoRefresh();
+                    // startAutoRefresh();
                 } catch (error) {
                     console.error('❌ Erreur lors du chargement:', error);
                 }
@@ -1173,8 +1174,9 @@ app.get('/', (c) => {
                     schedule = response.data;
                     console.log('Données reçues:', schedule.length, 'éléments');
                     
-                    // Supprimer automatiquement la semaine précédente si on est mardi ou après
-                    await autoDeleteOldWeek();
+                    // DÉSACTIVÉ - Causait la perte de données à chaque actualisation
+                    // La suppression des vieilles semaines doit être manuelle via le mode admin
+                    // await autoDeleteOldWeek();
                     
                     renderCalendar();
                     console.log('Calendrier rendu avec succès');
@@ -1750,6 +1752,21 @@ app.get('/', (c) => {
                 document.getElementById('weekStats').innerHTML = statsHtml;
             }
             
+            // Fonctions wrapper pour fermer la modale après inscription/désinscription
+            async function assignSlotAndCloseModal(slotId) {
+                await assignSlot(slotId);
+                // Fermer la modale
+                const modal = document.querySelector('.fixed');
+                if (modal) modal.remove();
+            }
+            
+            async function unassignSlotAndCloseModal(slotId) {
+                await unassignSlot(slotId);
+                // Fermer la modale
+                const modal = document.querySelector('.fixed');
+                if (modal) modal.remove();
+            }
+            
             function openDayModal(dateStr, activities) {
                 const date = new Date(dateStr);
                 const dayNames = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
@@ -1788,11 +1805,11 @@ app.get('/', (c) => {
                         if (isUrgent && isFree) {
                             bgColor = 'bg-yellow-50 border-yellow-400';
                             statusText = '⚠️ URGENT - Personne inscrit';
-                            buttonHtml = '<button onclick="assignSlot(' + slot.id + '); document.querySelector(\\'.fixed\\').remove();" class="w-full px-4 py-2 bg-red-500 text-white rounded font-bold hover:bg-red-600">Je m\\\'inscris !</button>';
+                            buttonHtml = '<button onclick="assignSlotAndCloseModal(' + slot.id + ')" class="w-full px-4 py-2 bg-red-500 text-white rounded font-bold hover:bg-red-600">Je m\'inscris !</button>';
                         } else if (isUserRegistered) {
                             bgColor = 'bg-gray-100 border-gray-400';
                             statusText = '✓ Vous êtes inscrit - ' + volunteers.join(', ') + (isNourrissage ? '' : ' (' + volunteers.length + '/' + maxVolunteers + ')');
-                            buttonHtml = '<button onclick="unassignSlot(' + slot.id + '); document.querySelector(\\'.fixed\\').remove();" class="w-full px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">Me désinscrire</button>';
+                            buttonHtml = '<button onclick="unassignSlotAndCloseModal(' + slot.id + ')" class="w-full px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">Me désinscrire</button>';
                         } else if (isFull) {
                             bgColor = 'bg-gray-200 border-gray-400';
                             statusText = '✓ Complet - ' + volunteers.join(', ') + ' (' + volunteers.length + '/' + maxVolunteers + ')';
@@ -1800,10 +1817,10 @@ app.get('/', (c) => {
                             bgColor = 'bg-gray-50 border-gray-300';
                             statusText = '👤 ' + volunteers.join(', ') + (isNourrissage ? '' : ' (' + volunteers.length + '/' + maxVolunteers + ')');
                             if (!isFull) {
-                                buttonHtml = '<button onclick="assignSlot(' + slot.id + '); document.querySelector(\\'.fixed\\').remove();" class="w-full px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">M\\\'inscrire aussi</button>';
+                                buttonHtml = '<button onclick="assignSlotAndCloseModal(' + slot.id + ')" class="w-full px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">M\'inscrire aussi</button>';
                             }
                         } else {
-                            buttonHtml = '<button onclick="assignSlot(' + slot.id + '); document.querySelector(\\'.fixed\\').remove();" class="w-full px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">M\\\'inscrire</button>';
+                            buttonHtml = '<button onclick="assignSlotAndCloseModal(' + slot.id + ')" class="w-full px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">M\'inscrire</button>';
                         }
                         
                         activitiesHtml += '<div class="border-l-4 ' + bgColor + ' p-3 rounded mb-3">' +
