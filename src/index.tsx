@@ -706,9 +706,36 @@ app.get('/', (c) => {
               box-shadow: 0 0 20px rgba(76, 175, 80, 0.8);
             }
           }
+          
+          /* Fond d'écran fixe avec image des chèvres */
+          body {
+            background-image: url('https://page.gensparksite.com/v1/base64_upload/00c1123a4a1e8c5224e838bb48b6667b');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed; /* L'image reste fixe pendant le scroll */
+          }
+          
+          /* Ajouter une légère opacité blanche sur le contenu pour améliorer la lisibilité */
+          body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(255, 255, 255, 0.85); /* Overlay blanc semi-transparent */
+            z-index: -1;
+          }
+          
+          /* S'assurer que le contenu principal est au-dessus */
+          body > div {
+            position: relative;
+            z-index: 1;
+          }
         </style>
     </head>
-    <body class="bg-gray-100 min-h-screen">
+    <body class="min-h-screen">
         <div class="max-w-full mx-auto p-4 lg:p-6">
             <!-- En-tête -->
             <header class="text-center mb-8">
