@@ -1116,7 +1116,11 @@ app.get('/', (c) => {
                     '</div>';
                 }
                 
-                renderCalendar();
+                // Render calendar only if schedule data is already loaded
+                // This prevents rendering with empty data during initial page load
+                if (schedule && schedule.length > 0) {
+                    renderCalendar();
+                }
             }
 
             function updateNameStatus(message, className = '') {
