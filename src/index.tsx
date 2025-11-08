@@ -994,9 +994,9 @@ app.get('/', (c) => {
             let currentUser = null;
             let isAdminMode = false;
             let schedule = [];
-            // Vue par défaut: table (vue détaillée hebdomadaire)
+            // Vue par défaut: calendar (vue calendrier mensuel)
             // Charge la préférence depuis localStorage si elle existe
-            let viewMode = localStorage.getItem('viewMode') || 'table'; // 'calendar' ou 'table'
+            let viewMode = localStorage.getItem('viewMode') || 'calendar'; // 'calendar' ou 'table'
             let currentCalendarMonth = new Date(); // Mois affiché dans le calendrier
             let scrollPositions = {}; // Sauvegarder les positions de scroll
             
@@ -1064,10 +1064,13 @@ app.get('/', (c) => {
             document.addEventListener('DOMContentLoaded', async () => {
                 console.log('🔄 DOMContentLoaded - début');
                 try {
-                    // Réinitialiser le mode de vue à 'table' temporairement pour corriger le problème
-                    // L'utilisateur pourra ensuite choisir sa préférence avec le bouton toggle
-                    localStorage.setItem('viewMode', 'table');
-                    viewMode = 'table';
+                    // La vue par défaut est 'calendar' (vue calendrier mensuel)
+                    // L'utilisateur peut changer sa préférence avec le bouton toggle
+                    // Ne pas forcer la vue - respecter la préférence localStorage
+                    if (!localStorage.getItem('viewMode')) {
+                        localStorage.setItem('viewMode', 'calendar');
+                        viewMode = 'calendar';
+                    }
                     
                     console.log('📚 Chargement utilisateur...');
                     loadUserFromStorage();
@@ -1788,15 +1791,15 @@ app.get('/', (c) => {
             // Fonctions wrapper pour fermer la modale après inscription/désinscription
             async function assignSlotAndCloseModal(slotId) {
                 await assignSlot(slotId);
-                // Fermer la modale
-                const modal = document.querySelector('.fixed');
+                // Fermer la modale - utiliser un sélecteur spécifique pour éviter de supprimer d'autres éléments fixed
+                const modal = document.querySelector('.modal-overlay');
                 if (modal) modal.remove();
             }
             
             async function unassignSlotAndCloseModal(slotId) {
                 await unassignSlot(slotId);
-                // Fermer la modale
-                const modal = document.querySelector('.fixed');
+                // Fermer la modale - utiliser un sélecteur spécifique
+                const modal = document.querySelector('.modal-overlay');
                 if (modal) modal.remove();
             }
             
@@ -1809,7 +1812,7 @@ app.get('/', (c) => {
                 
                 // Créer le modal
                 const modal = document.createElement('div');
-                modal.className = 'fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4';
+                modal.className = 'modal-overlay fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4';
                 modal.onclick = (e) => {
                     if (e.target === modal) modal.remove();
                 };
