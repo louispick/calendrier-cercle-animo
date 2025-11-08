@@ -1787,11 +1787,11 @@ app.get('/', (c) => {
                         // Compter les créneaux à prendre (sans inscrits)
                         if (!hasVolunteers) {
                             toTakeCount++;
-                        }
-                        
-                        // Compter les urgents (qu'ils soient pris ou non)
-                        if (isUrgent) {
-                            urgentCount++;
+                            
+                            // Compter les urgents UNIQUEMENT s'ils sont libres (sans inscrits)
+                            if (isUrgent) {
+                                urgentCount++;
+                            }
                         }
                     }
                 });
