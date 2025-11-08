@@ -1299,53 +1299,82 @@ app.get('/', (c) => {
             }
 
             function setupEventListeners() {
-                document.getElementById('validateNameBtn').addEventListener('click', validateName);
-                document.getElementById('userName').addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter') validateName();
-                });
-
-                document.getElementById('toggleAdminBtn').addEventListener('click', toggleAdminMode);
+                // Helper function to safely add event listener
+                const safeAddListener = (id, event, handler) => {
+                    const element = document.getElementById(id);
+                    if (element) {
+                        element.addEventListener(event, handler);
+                    } else {
+                        console.warn('Element #' + id + ' not found, skipping event listener');
+                    }
+                };
                 
-                // Admin panel buttons
-                document.getElementById('addActivityBtn').addEventListener('click', openAddActivityModal);
-                document.getElementById('undoBtn').addEventListener('click', undoAction);
-                document.getElementById('redoBtn').addEventListener('click', redoAction);
-                document.getElementById('historyBtn').addEventListener('click', openHistoryModal);
+                // Essential listeners - must exist
+                safeAddListener('validateNameBtn', 'click', validateName);
+                const userNameInput = document.getElementById('userName');
+                if (userNameInput) {
+                    userNameInput.addEventListener('keypress', (e) => {
+                        if (e.key === 'Enter') validateName();
+                    });
+                }
+
+                safeAddListener('toggleAdminBtn', 'click', toggleAdminMode);
+                
+                // Admin panel buttons - may not exist yet
+                safeAddListener('addActivityBtn', 'click', openAddActivityModal);
+                safeAddListener('undoBtn', 'click', undoAction);
+                safeAddListener('redoBtn', 'click', redoAction);
+                safeAddListener('historyBtn', 'click', openHistoryModal);
                 
                 // Modal event listeners - Add Activity
-                document.getElementById('closeAddActivityModal').addEventListener('click', closeAddActivityModal);
-                document.getElementById('cancelAddActivity').addEventListener('click', closeAddActivityModal);
-                document.getElementById('addActivityForm').addEventListener('submit', submitAddActivity);
-                document.getElementById('activityType').addEventListener('change', handleActivityTypeChange);
+                safeAddListener('closeAddActivityModal', 'click', closeAddActivityModal);
+                safeAddListener('cancelAddActivity', 'click', closeAddActivityModal);
+                safeAddListener('addActivityForm', 'submit', submitAddActivity);
+                safeAddListener('activityType', 'change', handleActivityTypeChange);
                 
                 // Modal event listeners - Modify Activity
-                document.getElementById('closeModifyActivityModal').addEventListener('click', closeModifyActivityModal);
-                document.getElementById('cancelModifyActivity').addEventListener('click', closeModifyActivityModal);
-                document.getElementById('modifyActivityForm').addEventListener('submit', submitModifyActivity);
-                document.getElementById('modifyActivityType').addEventListener('change', handleModifyActivityTypeChange);
+                safeAddListener('closeModifyActivityModal', 'click', closeModifyActivityModal);
+                safeAddListener('cancelModifyActivity', 'click', closeModifyActivityModal);
+                safeAddListener('modifyActivityForm', 'submit', submitModifyActivity);
+                safeAddListener('modifyActivityType', 'change', handleModifyActivityTypeChange);
                 
                 // Modal event listeners - Add Person  
-                document.getElementById('closeAddPersonModal').addEventListener('click', closeAddPersonModal);
-                document.getElementById('cancelAddPerson').addEventListener('click', closeAddPersonModal);
-                document.getElementById('addPersonForm').addEventListener('submit', submitAddPerson);
+                safeAddListener('closeAddPersonModal', 'click', closeAddPersonModal);
+                safeAddListener('cancelAddPerson', 'click', closeAddPersonModal);
+                safeAddListener('addPersonForm', 'submit', submitAddPerson);
                 
                 // Modal event listeners - History
-                document.getElementById('closeHistoryModal').addEventListener('click', closeHistoryModal);
-                document.getElementById('closeHistoryBtn').addEventListener('click', closeHistoryModal);
+                safeAddListener('closeHistoryModal', 'click', closeHistoryModal);
+                safeAddListener('closeHistoryBtn', 'click', closeHistoryModal);
                 
                 // Close modals when clicking outside
-                document.getElementById('addActivityModal').addEventListener('click', (e) => {
-                    if (e.target.id === 'addActivityModal') closeAddActivityModal();
-                });
-                document.getElementById('modifyActivityModal').addEventListener('click', (e) => {
-                    if (e.target.id === 'modifyActivityModal') closeModifyActivityModal();
-                });
-                document.getElementById('addPersonModal').addEventListener('click', (e) => {
-                    if (e.target.id === 'addPersonModal') closeAddPersonModal();
-                });
-                document.getElementById('historyModal').addEventListener('click', (e) => {
-                    if (e.target.id === 'historyModal') closeHistoryModal();
-                });
+                const addActivityModal = document.getElementById('addActivityModal');
+                if (addActivityModal) {
+                    addActivityModal.addEventListener('click', (e) => {
+                        if (e.target.id === 'addActivityModal') closeAddActivityModal();
+                    });
+                }
+                
+                const modifyActivityModal = document.getElementById('modifyActivityModal');
+                if (modifyActivityModal) {
+                    modifyActivityModal.addEventListener('click', (e) => {
+                        if (e.target.id === 'modifyActivityModal') closeModifyActivityModal();
+                    });
+                }
+                
+                const addPersonModal = document.getElementById('addPersonModal');
+                if (addPersonModal) {
+                    addPersonModal.addEventListener('click', (e) => {
+                        if (e.target.id === 'addPersonModal') closeAddPersonModal();
+                    });
+                }
+                
+                const historyModal = document.getElementById('historyModal');
+                if (historyModal) {
+                    historyModal.addEventListener('click', (e) => {
+                        if (e.target.id === 'historyModal') closeHistoryModal();
+                    });
+                }
                 
                 // Update undo/redo buttons only when needed
                 updateUndoRedoButtons();
