@@ -739,10 +739,10 @@ app.get('/', (c) => {
         <div class="max-w-full mx-auto p-4 lg:p-6">
             <!-- En-tête -->
             <header class="text-center mb-8">
-                <h1 class="text-3xl lg:text-4xl font-bold text-gray-800 mb-2">
+                <h1 class="text-3xl lg:text-4xl font-bold text-gray-800 mb-2" style="text-shadow: 2px 2px 4px rgba(255,255,255,0.8), -1px -1px 2px rgba(255,255,255,0.8);">
                     ❤️ Planning du Cercle Animô ❤️
                 </h1>
-                <p class="text-base lg:text-lg text-gray-600 mb-4">
+                <p class="text-base lg:text-lg font-bold mb-4" style="color: #1f2937; text-shadow: 1px 1px 3px rgba(255,255,255,0.9), -1px -1px 2px rgba(255,255,255,0.9), 0 0 10px rgba(255,255,255,0.7);">
                     Calendrier de nourrissage des animaux et activités de la ferme
                 </p>
                 
