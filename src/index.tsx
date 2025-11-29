@@ -396,6 +396,98 @@ app.post('/api/backups/:id/restore', async (c) => {
   }
 });
 
+// API - Migration des semaines existantes
+app.post('/api/migrate-weeks', async (c) => {
+  try {
+    const db = c.env.DB;
+    
+    // Backup avant migration
+    const currentSchedule = await getAllSchedule(db);
+    await createBackup(db, currentSchedule, 'pre_migration', 'Backup automatique avant migration des semaines');
+    
+    // Calculer le lundi de la semaine prochaine
+    const today = new Date();
+    const currentMonday = new Date(today);
+    const dayOfWeek = today.getDay();
+    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    currentMonday.setDate(today.getDate() + daysToMonday);
+    
+    const nextMonday = new Date(currentMonday);
+    nextMonday.setDate(currentMonday.getDate() + 7);
+    const nextMondayStr = nextMonday.toISOString().split('T')[0];
+    
+    const futureActivities = currentSchedule.filter(slot => slot.date >= nextMondayStr);
+    
+    let updatedCount = 0;
+    let addedCount = 0;
+    const statements = [];
+    
+    // Grouper par date
+    const byDate = {};
+    futureActivities.forEach(slot => {
+      if (!byDate[slot.date]) {
+        byDate[slot.date] = [];
+      }
+      byDate[slot.date].push(slot);
+    });
+    
+    const maxId = Math.max(...currentSchedule.map(s => s.id), 0);
+    let newId = maxId + 1;
+    
+    Object.keys(byDate).sort().forEach(dateStr => {
+      const activities = byDate[dateStr];
+      const date = new Date(dateStr);
+      const dayOfWeek = date.getDay() === 0 ? 7 : date.getDay();
+      
+      // Lundi - ajouter Legumes Biocoop si manquant
+      if (dayOfWeek === 1) {
+        const hasLegumesLundi = activities.some(a => a.activity_type === 'Légumes');
+        if (!hasLegumesLundi) {
+          statements.push(db.prepare('INSERT INTO schedule (id, date, time, activity_type, description, notes, status, volunteer_name, volunteers, is_urgent_when_free) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(newId++, dateStr, null, 'Légumes', 'Récupération et distribution de légumes', 'Biocoop', 'free', null, '[]', 0));
+          addedCount++;
+        }
+      }
+      
+      // Mardi - ajouter Legumes Carrefour si manquant
+      if (dayOfWeek === 2) {
+        const hasLegumesMardi = activities.some(a => a.activity_type === 'Légumes');
+        if (!hasLegumesMardi) {
+          statements.push(db.prepare('INSERT INTO schedule (id, date, time, activity_type, description, notes, status, volunteer_name, volunteers, is_urgent_when_free) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(newId++, dateStr, null, 'Légumes', 'Récupération et distribution de légumes', 'Carrefour', 'free', null, '[]', 0));
+          addedCount++;
+        }
+      }
+      
+      // Retirer urgents par defaut des nourrissages libres
+      activities.forEach(activity => {
+        if (activity.activity_type === 'Nourrissage' && activity.is_urgent_when_free) {
+          const hasVolunteers = activity.volunteers && activity.volunteers.length > 0;
+          if (!hasVolunteers) {
+            statements.push(db.prepare('UPDATE schedule SET is_urgent_when_free = 0, status = ? WHERE id = ?').bind('free', activity.id));
+            updatedCount++;
+          }
+        }
+      });
+    });
+    
+    if (statements.length > 0) {
+      await db.batch(statements);
+    }
+    
+    return c.json({
+      success: true,
+      message: 'Migration reussie',
+      startDate: nextMondayStr,
+      nourrissagesUpdated: updatedCount,
+      legumesAdded: addedCount,
+      totalChanges: statements.length
+    });
+    
+  } catch (error) {
+    console.error('Erreur migration:', error);
+    return c.json({ error: 'Echec migration: ' + error.message }, 500);
+  }
+});
+
 // API - Exporter le schedule actuel en JSON
 app.get('/api/export', async (c) => {
   try {
@@ -403,11 +495,11 @@ app.get('/api/export', async (c) => {
     const schedule = await getAllSchedule(db);
     
     return c.json(schedule, 200, {
-      'Content-Disposition': `attachment; filename="calendrier-animo-export-${new Date().toISOString().split('T')[0]}.json"`
+      'Content-Disposition': 'attachment; filename="calendrier-animo-export-' + new Date().toISOString().split('T')[0] + '.json"'
     });
   } catch (error) {
-    console.error('❌ Erreur export:', error);
-    return c.json({ error: 'Échec export: ' + error.message }, 500);
+    console.error('Erreur export:', error);
+    return c.json({ error: 'Echec export: ' + error.message }, 500);
   }
 });
 
@@ -811,28 +903,15 @@ app.get('/', (c) => {
                     <i class="fas fa-tools mr-2"></i>
                     Administration
                 </h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <button id="addActivityBtn" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors">
                         <i class="fas fa-plus-circle mr-2"></i>
-                        Ajouter Activité
+                        Ajouter Activite
                     </button>
-                    <button id="undoBtn" class="px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 transition-colors" disabled>
-                        <i class="fas fa-undo mr-2"></i>
-                        Annuler
+                    <button id="migrateWeeksBtn" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors">
+                        <i class="fas fa-sync-alt mr-2"></i>
+                        Migrer Semaines
                     </button>
-                    <button id="redoBtn" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors" disabled>
-                        <i class="fas fa-redo mr-2"></i>
-                        Refaire
-                    </button>
-                    <button id="historyBtn" class="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors">
-                        <i class="fas fa-history mr-2"></i>
-                        Historique
-                    </button>
-                </div>
-                
-                <div class="mt-4 p-3 bg-yellow-100 border border-yellow-300 rounded text-sm text-black">
-                    <i class="fas fa-info-circle mr-2 text-yellow-600"></i>
-                    <strong>Mode Admin activé :</strong> Boutons X pour supprimer les semaines • Gestion des urgences
                 </div>
             </div>
 
@@ -1381,9 +1460,7 @@ app.get('/', (c) => {
                 
                 // Admin panel buttons - may not exist yet
                 safeAddListener('addActivityBtn', 'click', openAddActivityModal);
-                safeAddListener('undoBtn', 'click', undoAction);
-                safeAddListener('redoBtn', 'click', redoAction);
-                safeAddListener('historyBtn', 'click', openHistoryModal);
+                safeAddListener('migrateWeeksBtn', 'click', migrateWeeks);
                 
                 // Modal event listeners - Add Activity
                 safeAddListener('closeAddActivityModal', 'click', closeAddActivityModal);
@@ -4251,6 +4328,41 @@ app.get('/', (c) => {
                     month: 'long', 
                     year: 'numeric' 
                 });
+            }
+            
+            async function migrateWeeks() {
+                const msg = 'Voulez-vous migrer toutes les semaines a partir de la semaine prochaine ?\n\n' +
+                    'Cette action va :\n' +
+                    '- Ajouter Legumes lundi (Biocoop)\n' +
+                    '- Ajouter Legumes mardi (Carrefour)\n' +
+                    '- Retirer le statut urgent par defaut\n\n' +
+                    'Un backup sera cree avant la migration.';
+                
+                if (!confirm(msg)) {
+                    return;
+                }
+                
+                try {
+                    document.getElementById('loading').classList.remove('hidden');
+                    const response = await axios.post('/api/migrate-weeks');
+                    
+                    if (response.data.success) {
+                        const result = 'Migration reussie !\n\n' +
+                            'A partir du : ' + response.data.startDate + '\n' +
+                            'Nourrissages mis a jour : ' + response.data.nourrissagesUpdated + '\n' +
+                            'Legumes ajoutes : ' + response.data.legumesAdded + '\n' +
+                            'Total modifications : ' + response.data.totalChanges;
+                        alert(result);
+                        await loadSchedule();
+                    } else {
+                        alert('Erreur lors de la migration');
+                    }
+                } catch (error) {
+                    console.error('Erreur migration:', error);
+                    alert('Erreur : ' + error.message);
+                } finally {
+                    document.getElementById('loading').classList.add('hidden');
+                }
             }
         </script>
     </body>
