@@ -903,14 +903,10 @@ app.get('/', (c) => {
                     <i class="fas fa-tools mr-2"></i>
                     Administration
                 </h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div class="grid grid-cols-1 gap-3">
                     <button id="addActivityBtn" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors">
                         <i class="fas fa-plus-circle mr-2"></i>
                         Ajouter Activite
-                    </button>
-                    <button id="migrateWeeksBtn" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors">
-                        <i class="fas fa-sync-alt mr-2"></i>
-                        Migrer Semaines
                     </button>
                 </div>
             </div>
@@ -1460,7 +1456,6 @@ app.get('/', (c) => {
                 
                 // Admin panel buttons - may not exist yet
                 safeAddListener('addActivityBtn', 'click', openAddActivityModal);
-                safeAddListener('migrateWeeksBtn', 'click', migrateWeeks);
                 
                 // Modal event listeners - Add Activity
                 safeAddListener('closeAddActivityModal', 'click', closeAddActivityModal);
@@ -4328,32 +4323,6 @@ app.get('/', (c) => {
                     month: 'long', 
                     year: 'numeric' 
                 });
-            }
-            
-            async function migrateWeeks() {
-                const msg = 'Voulez-vous migrer toutes les semaines a partir de la semaine prochaine ? Cette action va : Ajouter Legumes lundi (Biocoop), Ajouter Legumes mardi (Carrefour), Retirer le statut urgent par defaut. Un backup sera cree avant la migration.';
-                
-                if (!confirm(msg)) {
-                    return;
-                }
-                
-                try {
-                    document.getElementById('loading').classList.remove('hidden');
-                    const response = await axios.post('/api/migrate-weeks');
-                    
-                    if (response.data.success) {
-                        const result = 'Migration reussie ! A partir du : ' + response.data.startDate + ' - Nourrissages mis a jour : ' + response.data.nourrissagesUpdated + ' - Legumes ajoutes : ' + response.data.legumesAdded + ' - Total modifications : ' + response.data.totalChanges;
-                        alert(result);
-                        await loadSchedule();
-                    } else {
-                        alert('Erreur lors de la migration');
-                    }
-                } catch (error) {
-                    console.error('Erreur migration:', error);
-                    alert('Erreur : ' + error.message);
-                } finally {
-                    document.getElementById('loading').classList.add('hidden');
-                }
             }
         </script>
     </body>
