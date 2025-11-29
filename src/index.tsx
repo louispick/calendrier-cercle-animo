@@ -4331,12 +4331,7 @@ app.get('/', (c) => {
             }
             
             async function migrateWeeks() {
-                const msg = 'Voulez-vous migrer toutes les semaines a partir de la semaine prochaine ?\n\n' +
-                    'Cette action va :\n' +
-                    '- Ajouter Legumes lundi (Biocoop)\n' +
-                    '- Ajouter Legumes mardi (Carrefour)\n' +
-                    '- Retirer le statut urgent par defaut\n\n' +
-                    'Un backup sera cree avant la migration.';
+                const msg = 'Voulez-vous migrer toutes les semaines a partir de la semaine prochaine ? Cette action va : Ajouter Legumes lundi (Biocoop), Ajouter Legumes mardi (Carrefour), Retirer le statut urgent par defaut. Un backup sera cree avant la migration.';
                 
                 if (!confirm(msg)) {
                     return;
@@ -4347,11 +4342,7 @@ app.get('/', (c) => {
                     const response = await axios.post('/api/migrate-weeks');
                     
                     if (response.data.success) {
-                        const result = 'Migration reussie !\n\n' +
-                            'A partir du : ' + response.data.startDate + '\n' +
-                            'Nourrissages mis a jour : ' + response.data.nourrissagesUpdated + '\n' +
-                            'Legumes ajoutes : ' + response.data.legumesAdded + '\n' +
-                            'Total modifications : ' + response.data.totalChanges;
+                        const result = 'Migration reussie ! A partir du : ' + response.data.startDate + ' - Nourrissages mis a jour : ' + response.data.nourrissagesUpdated + ' - Legumes ajoutes : ' + response.data.legumesAdded + ' - Total modifications : ' + response.data.totalChanges;
                         alert(result);
                         await loadSchedule();
                     } else {
