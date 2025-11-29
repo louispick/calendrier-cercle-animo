@@ -285,19 +285,7 @@ export async function initializeScheduleIfEmpty(db: D1Database): Promise<void> {
         const dateStr = date.toISOString().split('T')[0];
         const dayOfWeek = day + 1; // 1=Lundi, 7=Dimanche
         
-        // Nourrissage quotidien
-        const nourrissageId = week * 20 + day + 1;
-        let nourrissageStatus = 'free';
-        let nourrissageVolunteer = null;
-        
-        // Some test data
-        if (day === 0 || day === 3) {
-          nourrissageStatus = 'urgent';
-        } else if (day === 1) {
-          nourrissageStatus = 'assigned';
-          nourrissageVolunteer = 'Alice';
-        }
-        
+        // Nourrissage quotidien (plus d'urgents par défaut)
         schedule.push({
           date: dateStr,
           day_of_week: dayOfWeek,
@@ -305,24 +293,40 @@ export async function initializeScheduleIfEmpty(db: D1Database): Promise<void> {
           activity_type: 'Nourrissage',
           description: 'Nourrissage quotidien des animaux',
           notes: '',
-          status: nourrissageStatus,
-          volunteer_name: nourrissageVolunteer,
-          volunteers: nourrissageVolunteer ? [nourrissageVolunteer] : [],
-          is_urgent_when_free: day === 0 || day === 3
+          status: 'free',
+          volunteer_name: null,
+          volunteers: [],
+          is_urgent_when_free: false
         });
         
-        // Légumes le mardi
-        if (day === 1) {
+        // Légumes le lundi - Biocoop
+        if (day === 0) { // day 0 = lundi dans la boucle
           schedule.push({
             date: dateStr,
             day_of_week: dayOfWeek,
             time: null,
             activity_type: 'Légumes',
             description: 'Récupération et distribution de légumes',
-            notes: '',
-            status: 'assigned',
-            volunteer_name: 'Clement',
-            volunteers: ['Clement'],
+            notes: 'Biocoop',
+            status: 'free',
+            volunteer_name: null,
+            volunteers: [],
+            is_urgent_when_free: false
+          });
+        }
+        
+        // Légumes le mardi - Carrefour
+        if (day === 1) { // day 1 = mardi dans la boucle
+          schedule.push({
+            date: dateStr,
+            day_of_week: dayOfWeek,
+            time: null,
+            activity_type: 'Légumes',
+            description: 'Récupération et distribution de légumes',
+            notes: 'Carrefour',
+            status: 'free',
+            volunteer_name: null,
+            volunteers: [],
             is_urgent_when_free: false
           });
         }
@@ -419,7 +423,7 @@ export async function addNewWeeks(db: D1Database, targetWeeks: number = 12): Pro
     const dateStr = date.toISOString().split('T')[0];
     const dayOfWeek = date.getDay() === 0 ? 7 : date.getDay(); // 1=Lundi, 7=Dimanche
     
-    // Nourrissage quotidien
+    // Nourrissage quotidien (plus d'urgents par défaut)
     newActivities.push({
       id: currentId++,
       date: dateStr,
@@ -428,13 +432,30 @@ export async function addNewWeeks(db: D1Database, targetWeeks: number = 12): Pro
       activity_type: 'Nourrissage',
       description: 'Nourrissage quotidien des animaux',
       notes: '',
-      status: (dayOfWeek === 1 || dayOfWeek === 4) ? 'urgent' : 'free', // Lundi et Jeudi urgents
+      status: 'free',
       volunteer_name: null,
       volunteers: [],
-      is_urgent_when_free: (dayOfWeek === 1 || dayOfWeek === 4)
+      is_urgent_when_free: false
     });
     
-    // Légumes le mardi
+    // Légumes le lundi - Biocoop
+    if (dayOfWeek === 1) {
+      newActivities.push({
+        id: currentId++,
+        date: dateStr,
+        day_of_week: dayOfWeek,
+        time: null,
+        activity_type: 'Légumes',
+        description: 'Récupération et distribution de légumes',
+        notes: 'Biocoop',
+        status: 'free',
+        volunteer_name: null,
+        volunteers: [],
+        is_urgent_when_free: false
+      });
+    }
+    
+    // Légumes le mardi - Carrefour
     if (dayOfWeek === 2) {
       newActivities.push({
         id: currentId++,
@@ -443,7 +464,7 @@ export async function addNewWeeks(db: D1Database, targetWeeks: number = 12): Pro
         time: null,
         activity_type: 'Légumes',
         description: 'Récupération et distribution de légumes',
-        notes: '',
+        notes: 'Carrefour',
         status: 'free',
         volunteer_name: null,
         volunteers: [],

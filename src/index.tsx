@@ -1987,8 +1987,24 @@ app.get('/', (c) => {
                 toggleDiv.appendChild(toggleBtn);
                 calendar.appendChild(toggleDiv);
 
-                const weekGroups = groupByWeeks(schedule);
-                const today = new Date().toISOString().split('T')[0];
+                // Filtrer le schedule pour la vue détaillée : 8 semaines
+                // (semaine dernière + semaine actuelle + 6 semaines suivantes)
+                const today = new Date();
+                const currentMonday = getMonday(today);
+                const lastMonday = new Date(currentMonday);
+                lastMonday.setDate(currentMonday.getDate() - 7); // Semaine dernière
+                const endDate = new Date(currentMonday);
+                endDate.setDate(currentMonday.getDate() + (7 * 7)); // +7 semaines = semaine actuelle + 6 suivantes
+                
+                const filteredSchedule = schedule.filter(slot => {
+                    const slotDate = new Date(slot.date);
+                    return slotDate >= lastMonday && slotDate < endDate;
+                });
+                
+                console.log('Vue détaillée : affichage de', filteredSchedule.length, 'activités sur 8 semaines');
+                
+                const weekGroups = groupByWeeks(filteredSchedule);
+                const todayStr = today.toISOString().split('T')[0];
 
                 weekGroups.forEach((week, weekIndex) => {
                     const weekDiv = document.createElement('div');
@@ -2050,7 +2066,7 @@ app.get('/', (c) => {
                         
                         const dayDate = new Date(currentWeekStart);
                         dayDate.setDate(currentWeekStart.getDate() + dayIndex);
-                        const isToday = dayDate.toISOString().split('T')[0] === today;
+                        const isToday = dayDate.toISOString().split('T')[0] === todayStr;
                         
                         // Bouton X pour supprimer la ligne de semaine (seulement sur première colonne et après semaine 4)
                         let deleteButton = '';
@@ -2086,7 +2102,7 @@ app.get('/', (c) => {
                         
                         const dayDate = new Date(currentWeekStart);
                         dayDate.setDate(currentWeekStart.getDate() + dayIndex);
-                        const isToday = dayDate.toISOString().split('T')[0] === today;
+                        const isToday = dayDate.toISOString().split('T')[0] === todayStr;
                         
                         if (isToday) {
                             cell.classList.add('today-highlight');
@@ -2133,7 +2149,7 @@ app.get('/', (c) => {
                             
                             const dayDate = new Date(currentWeekStart);
                             dayDate.setDate(currentWeekStart.getDate() + dayIndex);
-                            const isToday = dayDate.toISOString().split('T')[0] === today;
+                            const isToday = dayDate.toISOString().split('T')[0] === todayStr;
                             
                             if (isToday) {
                                 cell.classList.add('today-highlight');
