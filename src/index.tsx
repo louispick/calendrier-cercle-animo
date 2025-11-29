@@ -13,7 +13,8 @@ import {
   getAllBackups,
   getBackupById,
   restoreBackup,
-  cleanOldBackups
+  cleanOldBackups,
+  autoManageWeeks
 } from './db-helpers'
 
 type Bindings = {
@@ -184,6 +185,9 @@ app.get('/api/schedule', async (c) => {
     
     // Initialize schedule if database is empty
     await initializeScheduleIfEmpty(db);
+    
+    // Auto-manage weeks: clean old ones (> 7 days) and add new ones (maintain 12 weeks ahead)
+    await autoManageWeeks(db, 12);
     
     // Get all schedule from D1
     const schedule = await getAllSchedule(db);

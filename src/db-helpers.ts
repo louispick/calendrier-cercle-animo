@@ -349,3 +349,149 @@ export async function initializeScheduleIfEmpty(db: D1Database): Promise<void> {
     console.log('✅ Database initialized with', schedule.length, 'activities');
   }
 }
+
+// ===== AUTO-GESTION DES SEMAINES =====
+
+/**
+ * Supprime les semaines trop anciennes (> 7 jours dans le passé)
+ * Retourne le nombre d'activités supprimées
+ */
+export async function cleanOldWeeks(db: D1Database): Promise<number> {
+  const today = new Date();
+  const cutoffDate = new Date(today);
+  cutoffDate.setDate(today.getDate() - 7); // 7 jours dans le passé
+  const cutoffStr = cutoffDate.toISOString().split('T')[0];
+  
+  const result = await db.prepare(`
+    DELETE FROM schedule WHERE date < ?
+  `).bind(cutoffStr).run();
+  
+  const deleted = result.meta.changes || 0;
+  if (deleted > 0) {
+    console.log(`🗑️ ${deleted} activité(s) ancienne(s) supprimée(s) (< ${cutoffStr})`);
+  }
+  
+  return deleted;
+}
+
+/**
+ * Ajoute de nouvelles semaines pour maintenir toujours 12 semaines à l'avance
+ * Retourne le nombre d'activités ajoutées
+ */
+export async function addNewWeeks(db: D1Database, targetWeeks: number = 12): Promise<number> {
+  // 1. Trouver la date maximale existante
+  const maxDateResult = await db.prepare('SELECT MAX(date) as max_date FROM schedule').first();
+  const maxDateStr = (maxDateResult as any)?.max_date;
+  
+  let lastDate: Date;
+  
+  if (maxDateStr) {
+    lastDate = new Date(maxDateStr);
+    lastDate.setDate(lastDate.getDate() + 1); // Commencer le lendemain
+  } else {
+    // Pas de données : commencer au lundi de cette semaine
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    lastDate = new Date(today);
+    lastDate.setDate(today.getDate() + daysToMonday);
+  }
+  
+  // 2. Calculer combien de jours on a déjà à l'avance
+  const today = new Date();
+  const daysInFuture = Math.ceil((lastDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  const targetDays = targetWeeks * 7;
+  const daysToAdd = Math.max(0, targetDays - daysInFuture);
+  
+  if (daysToAdd === 0) {
+    console.log(`✅ Planning déjà à jour (${Math.floor(daysInFuture / 7)} semaines à l'avance)`);
+    return 0;
+  }
+  
+  // 3. Générer les nouvelles activités
+  const newActivities = [];
+  const startId = (await db.prepare('SELECT MAX(id) as max_id FROM schedule').first() as any)?.max_id || 0;
+  let currentId = startId + 1;
+  
+  for (let dayOffset = 0; dayOffset < daysToAdd; dayOffset++) {
+    const date = new Date(lastDate);
+    date.setDate(lastDate.getDate() + dayOffset);
+    const dateStr = date.toISOString().split('T')[0];
+    const dayOfWeek = date.getDay() === 0 ? 7 : date.getDay(); // 1=Lundi, 7=Dimanche
+    
+    // Nourrissage quotidien
+    newActivities.push({
+      id: currentId++,
+      date: dateStr,
+      day_of_week: dayOfWeek,
+      time: null,
+      activity_type: 'Nourrissage',
+      description: 'Nourrissage quotidien des animaux',
+      notes: '',
+      status: (dayOfWeek === 1 || dayOfWeek === 4) ? 'urgent' : 'free', // Lundi et Jeudi urgents
+      volunteer_name: null,
+      volunteers: [],
+      is_urgent_when_free: (dayOfWeek === 1 || dayOfWeek === 4)
+    });
+    
+    // Légumes le mardi
+    if (dayOfWeek === 2) {
+      newActivities.push({
+        id: currentId++,
+        date: dateStr,
+        day_of_week: dayOfWeek,
+        time: null,
+        activity_type: 'Légumes',
+        description: 'Récupération et distribution de légumes',
+        notes: '',
+        status: 'free',
+        volunteer_name: null,
+        volunteers: [],
+        is_urgent_when_free: false
+      });
+    }
+  }
+  
+  // 4. Insérer en base de données
+  if (newActivities.length > 0) {
+    const statements = newActivities.map(activity => {
+      const volunteersJson = JSON.stringify(activity.volunteers);
+      return db.prepare(`
+        INSERT INTO schedule (id, date, time, activity_type, description, notes, status, volunteer_name, volunteers, is_urgent_when_free)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        activity.id,
+        activity.date,
+        activity.time,
+        activity.activity_type,
+        activity.description,
+        activity.notes,
+        activity.status,
+        activity.volunteer_name,
+        volunteersJson,
+        activity.is_urgent_when_free ? 1 : 0
+      );
+    });
+    
+    await db.batch(statements);
+    console.log(`📅 ${newActivities.length} nouvelle(s) activité(s) ajoutée(s) (${Math.floor(daysToAdd / 7)} semaines)`);
+  }
+  
+  return newActivities.length;
+}
+
+/**
+ * Maintenance automatique : nettoie les vieilles semaines et ajoute les nouvelles
+ * À appeler au chargement du planning
+ */
+export async function autoManageWeeks(db: D1Database, targetWeeks: number = 12): Promise<void> {
+  console.log('🔄 Auto-gestion des semaines...');
+  
+  // 1. Supprimer les semaines anciennes (> 7 jours)
+  const deleted = await cleanOldWeeks(db);
+  
+  // 2. Ajouter de nouvelles semaines pour maintenir le nombre cible
+  const added = await addNewWeeks(db, targetWeeks);
+  
+  console.log(`✅ Auto-gestion terminée : ${deleted} supprimées, ${added} ajoutées`);
+}
