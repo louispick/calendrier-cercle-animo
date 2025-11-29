@@ -2260,15 +2260,8 @@ app.get('/', (c) => {
                     calendar.appendChild(weekDiv);
                 });
                 
-                // Bouton + en bas pour ajouter une nouvelle semaine (seulement en mode admin)
-                if (isAdminMode) {
-                    const addWeekDiv = document.createElement('div');
-                    addWeekDiv.className = 'text-center mt-6';
-                    
-                    addWeekDiv.innerHTML = '<button onclick="addNewWeek()" class="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors" title="Ajouter une nouvelle semaine">' +
-                        '<i class="fas fa-plus mr-2"></i>Ajouter une semaine</button>';
-                    calendar.appendChild(addWeekDiv);
-                }
+                // NOTE: Bouton "Ajouter une semaine" supprimé (génération automatique active)
+                // La fonction addNewWeek() est conservée dans le code pour future réimplémentation
                 
                 // Légende en bas pour la vue tableau
                 const legendDiv = document.createElement('div');
