@@ -186,8 +186,10 @@ app.get('/api/schedule', async (c) => {
     // Initialize schedule if database is empty
     await initializeScheduleIfEmpty(db);
     
-    // Auto-manage weeks: clean old ones (> 7 days) and add new ones (maintain 12 weeks ahead)
-    await autoManageWeeks(db, 12);
+    // Auto-manage weeks: NO deletion (keep history), add new ones to maintain 52 weeks (1 year) ahead
+    // Vue calendrier : historique complet + inscription très en avance
+    // Vue détaillée : filtrage côté client si nécessaire
+    await autoManageWeeks(db, 52, false); // 52 semaines, pas de suppression
     
     // Get all schedule from D1
     const schedule = await getAllSchedule(db);

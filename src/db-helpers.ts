@@ -483,12 +483,21 @@ export async function addNewWeeks(db: D1Database, targetWeeks: number = 12): Pro
 /**
  * Maintenance automatique : nettoie les vieilles semaines et ajoute les nouvelles
  * À appeler au chargement du planning
+ * @param db - Database instance
+ * @param targetWeeks - Nombre de semaines à maintenir à l'avance (par défaut 12)
+ * @param enableCleanup - Si true, supprime les semaines anciennes. Si false, garde tout l'historique (par défaut true)
  */
-export async function autoManageWeeks(db: D1Database, targetWeeks: number = 12): Promise<void> {
+export async function autoManageWeeks(db: D1Database, targetWeeks: number = 12, enableCleanup: boolean = true): Promise<void> {
   console.log('🔄 Auto-gestion des semaines...');
   
-  // 1. Supprimer les semaines anciennes (> 7 jours)
-  const deleted = await cleanOldWeeks(db);
+  let deleted = 0;
+  
+  // 1. Supprimer les semaines anciennes (> 7 jours) - OPTIONNEL
+  if (enableCleanup) {
+    deleted = await cleanOldWeeks(db);
+  } else {
+    console.log('📚 Conservation de tout l\'historique (pas de suppression)');
+  }
   
   // 2. Ajouter de nouvelles semaines pour maintenir le nombre cible
   const added = await addNewWeeks(db, targetWeeks);
