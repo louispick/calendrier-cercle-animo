@@ -1656,7 +1656,7 @@ app.get('/', (c) => {
                             '<span class="text-gray-700">URGENT</span>' +
                         '</div>' +
                         '<div class="flex items-center gap-2">' +
-                            '<div class="w-4 h-4 bg-green-200 border-2 border-green-400 rounded flex items-center justify-center text-xs">🥕</div>' +
+                            '<div class="w-4 h-4 bg-orange-200 border-2 border-orange-400 rounded flex items-center justify-center text-xs">🥕</div>' +
                             '<span class="text-gray-700">Légumes</span>' +
                         '</div>' +
                         '<div class="flex items-center gap-2">' +
@@ -2283,7 +2283,7 @@ app.get('/', (c) => {
                             '<span class="text-gray-700">Urgent</span>' +
                         '</div>' +
                         '<div class="flex items-center gap-2">' +
-                            '<div class="w-6 h-6 rounded" style="background-color: #ffc107; border: 2px solid #e0a800;"></div>' +
+                            '<div class="w-6 h-6 rounded" style="background-color: #ff8c00; border: 2px solid #e67e00;"></div>' +
                             '<span class="text-gray-700">Légumes</span>' +
                         '</div>' +
                         '<div class="flex items-center gap-2">' +
@@ -2323,7 +2323,7 @@ app.get('/', (c) => {
                 // Définir les couleurs par type d'activité
                 const activityColors = {
                     'Nourrissage': { bg: '#dc3545', border: '#c82333' },  // Rouge
-                    'Légumes': { bg: '#ffc107', border: '#e0a800' },      // Jaune
+                    'Légumes': { bg: '#ff8c00', border: '#e67e00' },      // Orange
                     'Réunion': { bg: '#6f42c1', border: '#5a32a3' },      // Violet
                     'default': { bg: '#17a2b8', border: '#138496' }       // Cyan pour autres
                 };
@@ -3793,7 +3793,7 @@ app.get('/', (c) => {
             function getColorForActivityType(type) {
                 const colorMap = {
                     'Nourrissage': '#dc3545',
-                    'Légumes': '#ffc107', 
+                    'Légumes': '#ff8c00', 
                     'Réunion': '#6f42c1',
                     'Autre': '#20c997'
                 };
