@@ -1854,8 +1854,46 @@ app.get('/', (c) => {
                     
                     iconsDiv.innerHTML = iconsHtml;
                     
+                    // Créer un div pour afficher les prénoms inscrits
+                    const namesDiv = document.createElement('div');
+                    namesDiv.className = 'text-xs mt-1 px-1 truncate';
+                    
+                    if (weekExists) {
+                        // Récupérer le nourrissage du jour pour afficher qui est inscrit
+                        const nourrissageOfDay = activities.find(act => act.activity_type === 'Nourrissage');
+                        
+                        if (nourrissageOfDay) {
+                            const volunteers = nourrissageOfDay.volunteers || [];
+                            const isUrgentSlot = (nourrissageOfDay.is_urgent_when_free || nourrissageOfDay.status === 'urgent') && volunteers.length === 0;
+                            
+                            if (isUrgentSlot) {
+                                // Urgent : afficher "URGENT !" en rouge
+                                namesDiv.className += ' text-red-600 font-bold';
+                                namesDiv.textContent = 'URGENT !';
+                            } else if (volunteers.length === 0) {
+                                // Vert libre : afficher "Clément" en gris clair
+                                namesDiv.className += ' text-gray-500';
+                                namesDiv.textContent = 'Clément';
+                            } else {
+                                // Bleu pris : afficher le(s) prénom(s) en gras
+                                namesDiv.className += ' font-semibold text-gray-800';
+                                if (volunteers.length === 1) {
+                                    // Tronquer à 8 caractères max
+                                    const name = volunteers[0];
+                                    namesDiv.textContent = name.length > 8 ? name.substring(0, 8) + '...' : name;
+                                } else {
+                                    // Plusieurs inscrits : afficher le premier + nombre
+                                    const firstName = volunteers[0];
+                                    const displayName = firstName.length > 5 ? firstName.substring(0, 5) + '...' : firstName;
+                                    namesDiv.textContent = displayName + ' +' + (volunteers.length - 1);
+                                }
+                            }
+                        }
+                    }
+                    
                     dayDiv.appendChild(daySpan);
                     dayDiv.appendChild(iconsDiv);
+                    dayDiv.appendChild(namesDiv);
                     
                     // Ouvrir la modal seulement si la semaine existe
                     if (weekExists) {
