@@ -1757,7 +1757,8 @@ app.get('/', (c) => {
                     const weekExists = existingMondays.has(mondayStr);
                     
                     const dayDiv = document.createElement('button');
-                    dayDiv.className = 'aspect-square flex flex-col items-center justify-center border-2 rounded-lg p-1 transition-all';
+                    // OPTIMISATION MOBILE: p-0.5 au lieu de p-1 pour gagner de la place
+                    dayDiv.className = 'aspect-square flex flex-col items-center justify-center border-2 rounded-lg p-0.5 transition-all';
                     
                     if (!weekExists) {
                         // Semaine n'existe pas - griser et désactiver
@@ -1856,8 +1857,9 @@ app.get('/', (c) => {
                     const namesDiv = document.createElement('div');
                     // Police plus petite, overflow géré par CSS automatiquement
                     namesDiv.style.fontSize = '10px';
-                    namesDiv.style.lineHeight = '12px';
-                    namesDiv.className = 'mt-1 px-0.5 w-full overflow-hidden whitespace-nowrap text-ellipsis';
+                    namesDiv.style.lineHeight = '11px'; // Ligne plus serrée
+                    // OPTIMISATION MOBILE: tracking-tighter pour serrer les lettres, w-full pour prendre toute la place
+                    namesDiv.className = 'mt-0.5 px-0 w-full overflow-hidden whitespace-nowrap text-ellipsis tracking-tighter text-center';
                     
                     if (weekExists) {
                         // Récupérer le nourrissage du jour pour afficher qui est inscrit
