@@ -2147,26 +2147,6 @@ app.get('/', (c) => {
                         activitiesHtml += '</div>'; // fin card activité
                     });
                     
-                    // Bouton ajouter une activité
-                    activitiesHtml += '<div id="addActivitySection">';
-                    activitiesHtml += '<button id="showAddActivityForm" class="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-green-500 hover:text-green-600 font-semibold transition-all">➕ Ajouter une activité</button>';
-                    activitiesHtml += '<div id="addActivityForm" class="hidden mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">';
-                    activitiesHtml += '<div class="font-semibold mb-3 text-gray-800">Nouvelle activité</div>';
-                    activitiesHtml += '<div class="space-y-2">';
-                    activitiesHtml += '<select id="newActivityType" class="w-full border border-gray-300 rounded px-3 py-2">';
-                    activitiesHtml += '<option value="Légumes">Légumes</option>';
-                    activitiesHtml += '<option value="Réunion">Réunion</option>';
-                    activitiesHtml += '<option value="Autre">Autre</option>';
-                    activitiesHtml += '</select>';
-                    activitiesHtml += '<input type="text" id="newActivityNotes" placeholder="Note (ex: Carrefour)" class="w-full border border-gray-300 rounded px-3 py-2" />';
-                    activitiesHtml += '<div class="flex gap-2">';
-                    activitiesHtml += '<button id="confirmAddActivity" class="flex-1 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded font-semibold">Ajouter</button>';
-                    activitiesHtml += '<button id="cancelAddActivity" class="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded font-semibold">Annuler</button>';
-                    activitiesHtml += '</div>';
-                    activitiesHtml += '</div>';
-                    activitiesHtml += '</div>';
-                    activitiesHtml += '</div>';
-                    
                     modalContent.innerHTML = '<div class="sticky top-0 bg-gradient-to-r from-orange-500 to-red-500 text-white p-4 rounded-t-lg flex justify-between items-center">' +
                         '<div>' +
                             '<h2 class="font-bold text-lg">🔧 Admin - ' + dayName + '</h2>' +
@@ -2248,51 +2228,6 @@ app.get('/', (c) => {
                         };
                     });
                     
-                    // Afficher le formulaire d'ajout d'activité
-                    const showFormBtn = document.getElementById('showAddActivityForm');
-                    const addForm = document.getElementById('addActivityForm');
-                    if (showFormBtn && addForm) {
-                        showFormBtn.onclick = () => {
-                            showFormBtn.classList.add('hidden');
-                            addForm.classList.remove('hidden');
-                        };
-                    }
-                    
-                    // Annuler l'ajout d'activité
-                    const cancelAddBtn = document.getElementById('cancelAddActivity');
-                    if (cancelAddBtn) {
-                        cancelAddBtn.onclick = () => {
-                            addForm.classList.add('hidden');
-                            showFormBtn.classList.remove('hidden');
-                        };
-                    }
-                    
-                    // Confirmer l'ajout d'activité
-                    const confirmAddBtn = document.getElementById('confirmAddActivity');
-                    if (confirmAddBtn) {
-                        confirmAddBtn.onclick = () => {
-                            const type = document.getElementById('newActivityType').value;
-                            const notes = document.getElementById('newActivityNotes').value;
-                            
-                            // Créer la nouvelle activité
-                            const newActivity = {
-                                id: Date.now(), // ID temporaire
-                                date: dateStr,
-                                activity_type: type,
-                                notes: notes,
-                                volunteers: [],
-                                is_urgent_when_free: false,
-                                status: 'available'
-                            };
-                            
-                            editableActivities.push(newActivity);
-                            document.getElementById('newActivityNotes').value = '';
-                            addForm.classList.add('hidden');
-                            showFormBtn.classList.remove('hidden');
-                            renderModalContent();
-                        };
-                    }
-                    
                     // Enregistrer les modifications
                     const saveBtn = document.getElementById('saveAdminChanges');
                     if (saveBtn) {
@@ -2323,8 +2258,6 @@ app.get('/', (c) => {
                                 modal.remove();
                                 await loadSchedule();
                                 renderCalendar();
-                                
-                                alert('✅ Modifications enregistrées !');
                             } catch (error) {
                                 console.error('Erreur lors de la sauvegarde:', error);
                                 alert('❌ Erreur lors de la sauvegarde');
