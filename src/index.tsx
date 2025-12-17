@@ -1642,26 +1642,24 @@ app.get('/', (c) => {
                 const legendDiv = document.createElement('div');
                 legendDiv.className = 'bg-white rounded-lg shadow p-4 text-sm';
                 legendDiv.innerHTML = '<div class="font-semibold mb-3 text-gray-800">Légende :</div>' +
-                    '<div class="grid grid-cols-2 gap-3">' +
-                        '<div class="flex items-center gap-2">' +
-                            '<div class="w-4 h-4 bg-green-100 border-2 border-green-400 rounded flex items-center justify-center text-xs">⭕</div>' +
-                            '<span class="text-gray-700">Nourrissage libre</span>' +
+                    '<div class="space-y-2">' +
+                        '<div class="flex items-start gap-2">' +
+                            '<div class="w-5 h-5 bg-blue-200 border-2 border-blue-500 rounded flex items-center justify-center text-white text-xs font-bold flex-shrink-0 mt-0.5">✓</div>' +
+                            '<span class="text-gray-700 text-sm"><strong>Bleu :</strong> C\'est pris par quelqu\'un</span>' +
                         '</div>' +
-                        '<div class="flex items-center gap-2">' +
-                            '<div class="w-4 h-4 bg-blue-200 border-2 border-blue-500 rounded flex items-center justify-center text-white text-xs font-bold">✓</div>' +
-                            '<span class="text-gray-700">Nourrissage pris</span>' +
+                        '<div class="flex items-start gap-2">' +
+                            '<div class="w-5 h-5 bg-green-100 border-2 border-green-400 rounded flex items-center justify-center text-xs flex-shrink-0 mt-0.5">⭕</div>' +
+                            '<span class="text-gray-700 text-sm"><strong>Vert :</strong> C\'est dispo, mais Clément est là si besoin</span>' +
                         '</div>' +
-                        '<div class="flex items-center gap-2">' +
-                            '<div class="w-4 h-4 bg-yellow-100 border-2 border-yellow-400 rounded flex items-center justify-center text-xs">⚠️</div>' +
-                            '<span class="text-gray-700">URGENT</span>' +
+                        '<div class="flex items-start gap-2">' +
+                            '<div class="w-5 h-5 bg-yellow-100 border-2 border-yellow-400 rounded flex items-center justify-center text-xs flex-shrink-0 mt-0.5">⚠️</div>' +
+                            '<span class="text-gray-700 text-sm"><strong>Jaune :</strong> On cherche quelqu\'un !!</span>' +
                         '</div>' +
-                        '<div class="flex items-center gap-2">' +
+                        '<div class="flex items-center gap-2 pt-2 border-t">' +
                             '<div class="w-4 h-4 bg-orange-200 border-2 border-orange-400 rounded flex items-center justify-center text-xs">🥕</div>' +
-                            '<span class="text-gray-700">Légumes</span>' +
-                        '</div>' +
-                        '<div class="flex items-center gap-2">' +
+                            '<span class="text-gray-600 text-xs">Légumes</span>' +
                             '<div class="w-4 h-4 bg-purple-100 border-2 border-purple-300 rounded flex items-center justify-center text-xs">🎉</div>' +
-                            '<span class="text-gray-700">Événements</span>' +
+                            '<span class="text-gray-600 text-xs">Événements</span>' +
                         '</div>' +
                     '</div>' +
                     '<div class="mt-3 text-xs text-gray-600 bg-blue-50 p-2 rounded">' +
@@ -1856,8 +1854,10 @@ app.get('/', (c) => {
                     
                     // Créer un div pour afficher les prénoms inscrits
                     const namesDiv = document.createElement('div');
-                    namesDiv.className = 'text-xs mt-1 px-1 w-full overflow-hidden whitespace-nowrap text-ellipsis';
-                    namesDiv.style.maxWidth = '100%';
+                    // Police plus petite, overflow géré par CSS automatiquement
+                    namesDiv.style.fontSize = '10px';
+                    namesDiv.style.lineHeight = '12px';
+                    namesDiv.className = 'mt-1 px-0.5 w-full overflow-hidden whitespace-nowrap text-ellipsis';
                     
                     if (weekExists) {
                         // Récupérer le nourrissage du jour pour afficher qui est inscrit
@@ -1879,14 +1879,11 @@ app.get('/', (c) => {
                                 // Bleu pris : afficher le(s) prénom(s) en gras
                                 namesDiv.className += ' font-semibold text-gray-800';
                                 if (volunteers.length === 1) {
-                                    // Tronquer à 6 caractères max pour mobile
-                                    const name = volunteers[0];
-                                    namesDiv.textContent = name.length > 6 ? name.substring(0, 6) + '...' : name;
+                                    // Laisser CSS gérer la troncature automatiquement
+                                    namesDiv.textContent = volunteers[0];
                                 } else {
-                                    // Plusieurs inscrits : afficher le premier + nombre (très court)
-                                    const firstName = volunteers[0];
-                                    const displayName = firstName.length > 4 ? firstName.substring(0, 4) + '...' : firstName;
-                                    namesDiv.textContent = displayName + ' +' + (volunteers.length - 1);
+                                    // Plusieurs inscrits : afficher le premier + nombre
+                                    namesDiv.textContent = volunteers[0] + ' +' + (volunteers.length - 1);
                                 }
                             }
                         }
