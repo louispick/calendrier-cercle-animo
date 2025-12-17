@@ -1645,15 +1645,15 @@ app.get('/', (c) => {
                     '<div class="space-y-2">' +
                         '<div class="flex items-start gap-2">' +
                             '<div class="w-5 h-5 bg-blue-200 border-2 border-blue-500 rounded flex items-center justify-center text-white text-xs font-bold flex-shrink-0 mt-0.5">✓</div>' +
-                            '<span class="text-gray-700 text-sm"><strong>Bleu :</strong> C\'est pris par quelqu\'un</span>' +
+                            '<span class="text-gray-700 text-sm"><strong>Bleu :</strong> C&apos;est pris par quelqu&apos;un</span>' +
                         '</div>' +
                         '<div class="flex items-start gap-2">' +
                             '<div class="w-5 h-5 bg-green-100 border-2 border-green-400 rounded flex items-center justify-center text-xs flex-shrink-0 mt-0.5">⭕</div>' +
-                            '<span class="text-gray-700 text-sm"><strong>Vert :</strong> C\'est dispo, mais Clément est là si besoin</span>' +
+                            '<span class="text-gray-700 text-sm"><strong>Vert :</strong> C&apos;est dispo, mais Clément est là si besoin</span>' +
                         '</div>' +
                         '<div class="flex items-start gap-2">' +
                             '<div class="w-5 h-5 bg-yellow-100 border-2 border-yellow-400 rounded flex items-center justify-center text-xs flex-shrink-0 mt-0.5">⚠️</div>' +
-                            '<span class="text-gray-700 text-sm"><strong>Jaune :</strong> On cherche quelqu\'un !!</span>' +
+                            '<span class="text-gray-700 text-sm"><strong>Jaune :</strong> On cherche quelqu&apos;un !!</span>' +
                         '</div>' +
                         '<div class="flex items-center gap-2 pt-2 border-t">' +
                             '<div class="w-4 h-4 bg-orange-200 border-2 border-orange-400 rounded flex items-center justify-center text-xs">🥕</div>' +
