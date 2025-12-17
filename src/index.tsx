@@ -1856,7 +1856,8 @@ app.get('/', (c) => {
                     
                     // Créer un div pour afficher les prénoms inscrits
                     const namesDiv = document.createElement('div');
-                    namesDiv.className = 'text-xs mt-1 px-1 truncate';
+                    namesDiv.className = 'text-xs mt-1 px-1 w-full overflow-hidden whitespace-nowrap text-ellipsis';
+                    namesDiv.style.maxWidth = '100%';
                     
                     if (weekExists) {
                         // Récupérer le nourrissage du jour pour afficher qui est inscrit
@@ -1878,13 +1879,13 @@ app.get('/', (c) => {
                                 // Bleu pris : afficher le(s) prénom(s) en gras
                                 namesDiv.className += ' font-semibold text-gray-800';
                                 if (volunteers.length === 1) {
-                                    // Tronquer à 8 caractères max
+                                    // Tronquer à 6 caractères max pour mobile
                                     const name = volunteers[0];
-                                    namesDiv.textContent = name.length > 8 ? name.substring(0, 8) + '...' : name;
+                                    namesDiv.textContent = name.length > 6 ? name.substring(0, 6) + '...' : name;
                                 } else {
-                                    // Plusieurs inscrits : afficher le premier + nombre
+                                    // Plusieurs inscrits : afficher le premier + nombre (très court)
                                     const firstName = volunteers[0];
-                                    const displayName = firstName.length > 5 ? firstName.substring(0, 5) + '...' : firstName;
+                                    const displayName = firstName.length > 4 ? firstName.substring(0, 4) + '...' : firstName;
                                     namesDiv.textContent = displayName + ' +' + (volunteers.length - 1);
                                 }
                             }
