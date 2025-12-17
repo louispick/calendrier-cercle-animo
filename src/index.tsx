@@ -1975,6 +1975,15 @@ app.get('/', (c) => {
             }
             
             function openDayModal(dateStr, activities) {
+                // Router vers la bonne modal selon le mode
+                if (isAdminMode) {
+                    openAdminDayModal(dateStr, activities);
+                } else {
+                    openUserDayModal(dateStr, activities);
+                }
+            }
+            
+            function openUserDayModal(dateStr, activities) {
                 const date = new Date(dateStr);
                 const dayNames = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
                 const dayName = dayNames[date.getDay()];
@@ -2053,6 +2062,280 @@ app.get('/', (c) => {
                         activitiesHtml +
                     '</div>';
                 
+                modal.appendChild(modalContent);
+                document.body.appendChild(modal);
+            }
+            
+            function openAdminDayModal(dateStr, activities) {
+                const date = new Date(dateStr);
+                const dayNames = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+                const dayName = dayNames[date.getDay()];
+                const formattedDate = date.getDate() + ' ' + ['janv.', 'févr.', 'mars', 'avril', 'mai', 'juin', 
+                    'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'][date.getMonth()];
+                
+                // Créer une copie éditable des activités
+                let editableActivities = JSON.parse(JSON.stringify(activities));
+                
+                // Créer le modal
+                const modal = document.createElement('div');
+                modal.className = 'modal-overlay fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4';
+                modal.id = 'adminDayModal';
+                
+                const modalContent = document.createElement('div');
+                modalContent.className = 'bg-white rounded-lg max-w-2xl w-full max-h-[85vh] overflow-y-auto shadow-2xl';
+                
+                const renderModalContent = () => {
+                    let activitiesHtml = '';
+                    
+                    editableActivities.forEach((slot, index) => {
+                        const isNourrissage = slot.activity_type === 'Nourrissage';
+                        const volunteers = slot.volunteers || [];
+                        const maxVolunteers = isNourrissage ? 1 : 15;
+                        const isUrgent = slot.is_urgent_when_free || slot.status === 'urgent';
+                        
+                        // Couleur de bordure selon le type
+                        let borderColor = 'border-blue-400';
+                        if (slot.activity_type === 'Nourrissage') borderColor = 'border-red-400';
+                        else if (slot.activity_type === 'Légumes') borderColor = 'border-orange-400';
+                        else if (slot.activity_type === 'Réunion') borderColor = 'border-purple-400';
+                        
+                        activitiesHtml += '<div class="border-l-4 ' + borderColor + ' bg-gray-50 p-4 rounded mb-4" data-activity-index="' + index + '">';
+                        
+                        // En-tête avec type et horaire
+                        activitiesHtml += '<div class="flex justify-between items-start mb-3">';
+                        activitiesHtml += '<div>';
+                        activitiesHtml += '<div class="font-bold text-base">' + slot.activity_type + '</div>';
+                        activitiesHtml += '<input type="text" value="' + (slot.notes || '') + '" placeholder="Note (ex: Biocoop)" class="activity-notes text-xs text-gray-600 border border-gray-300 rounded px-2 py-1 mt-1 w-full" />';
+                        activitiesHtml += '</div>';
+                        activitiesHtml += '<button class="delete-activity text-red-500 hover:text-red-700 text-xl font-bold" title="Supprimer cette activité">×</button>';
+                        activitiesHtml += '</div>';
+                        
+                        // Section urgence pour nourrissage
+                        if (isNourrissage) {
+                            activitiesHtml += '<div class="mb-3">';
+                            activitiesHtml += '<label class="flex items-center gap-2 text-sm">';
+                            activitiesHtml += '<input type="checkbox" class="activity-urgent" ' + (isUrgent && volunteers.length === 0 ? 'checked' : '') + ' />';
+                            activitiesHtml += '<span>⚠️ Marquer comme URGENT</span>';
+                            activitiesHtml += '</label>';
+                            activitiesHtml += '</div>';
+                        }
+                        
+                        // Liste des inscrits
+                        activitiesHtml += '<div class="space-y-2">';
+                        activitiesHtml += '<div class="text-sm font-semibold text-gray-700">Inscrits (' + volunteers.length + '/' + maxVolunteers + ') :</div>';
+                        
+                        if (volunteers.length > 0) {
+                            volunteers.forEach((volunteer, vIndex) => {
+                                activitiesHtml += '<div class="flex items-center justify-between bg-white border border-gray-200 rounded px-3 py-2">';
+                                activitiesHtml += '<span class="text-sm">' + volunteer + '</span>';
+                                activitiesHtml += '<button class="remove-volunteer text-red-500 hover:text-red-700 text-sm" data-volunteer-index="' + vIndex + '">🗑️</button>';
+                                activitiesHtml += '</div>';
+                            });
+                        } else {
+                            activitiesHtml += '<div class="text-xs text-gray-500 italic">Aucun inscrit</div>';
+                        }
+                        
+                        // Champ pour ajouter un inscrit
+                        if (volunteers.length < maxVolunteers) {
+                            activitiesHtml += '<div class="flex gap-2 mt-2">';
+                            activitiesHtml += '<input type="text" placeholder="Ajouter quelqu&apos;un..." class="add-volunteer-input flex-1 border border-gray-300 rounded px-3 py-2 text-sm" />';
+                            activitiesHtml += '<button class="add-volunteer bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded text-sm font-semibold">➕</button>';
+                            activitiesHtml += '</div>';
+                        }
+                        
+                        activitiesHtml += '</div>'; // fin space-y-2
+                        activitiesHtml += '</div>'; // fin card activité
+                    });
+                    
+                    // Bouton ajouter une activité
+                    activitiesHtml += '<div id="addActivitySection">';
+                    activitiesHtml += '<button id="showAddActivityForm" class="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-green-500 hover:text-green-600 font-semibold transition-all">➕ Ajouter une activité</button>';
+                    activitiesHtml += '<div id="addActivityForm" class="hidden mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">';
+                    activitiesHtml += '<div class="font-semibold mb-3 text-gray-800">Nouvelle activité</div>';
+                    activitiesHtml += '<div class="space-y-2">';
+                    activitiesHtml += '<select id="newActivityType" class="w-full border border-gray-300 rounded px-3 py-2">';
+                    activitiesHtml += '<option value="Légumes">Légumes</option>';
+                    activitiesHtml += '<option value="Réunion">Réunion</option>';
+                    activitiesHtml += '<option value="Autre">Autre</option>';
+                    activitiesHtml += '</select>';
+                    activitiesHtml += '<input type="text" id="newActivityNotes" placeholder="Note (ex: Carrefour)" class="w-full border border-gray-300 rounded px-3 py-2" />';
+                    activitiesHtml += '<div class="flex gap-2">';
+                    activitiesHtml += '<button id="confirmAddActivity" class="flex-1 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded font-semibold">Ajouter</button>';
+                    activitiesHtml += '<button id="cancelAddActivity" class="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded font-semibold">Annuler</button>';
+                    activitiesHtml += '</div>';
+                    activitiesHtml += '</div>';
+                    activitiesHtml += '</div>';
+                    activitiesHtml += '</div>';
+                    
+                    modalContent.innerHTML = '<div class="sticky top-0 bg-gradient-to-r from-orange-500 to-red-500 text-white p-4 rounded-t-lg flex justify-between items-center">' +
+                        '<div>' +
+                            '<h2 class="font-bold text-lg">🔧 Admin - ' + dayName + '</h2>' +
+                            '<p class="text-sm opacity-90">' + formattedDate + '</p>' +
+                        '</div>' +
+                        '<button id="closeAdminModal" class="text-3xl hover:bg-white hover:bg-opacity-20 rounded px-2">×</button>' +
+                    '</div>' +
+                    '<div class="p-4">' +
+                        activitiesHtml +
+                    '</div>' +
+                    '<div class="sticky bottom-0 bg-white border-t border-gray-200 p-4 flex gap-3">' +
+                        '<button id="saveAdminChanges" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold text-lg">Enregistrer</button>' +
+                        '<button id="cancelAdminChanges" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-6 py-3 rounded-lg font-semibold">Annuler</button>' +
+                    '</div>';
+                    
+                    // Attacher les événements
+                    attachAdminModalEvents();
+                };
+                
+                const attachAdminModalEvents = () => {
+                    // Fermer la modal
+                    const closeBtn = document.getElementById('closeAdminModal');
+                    const cancelBtn = document.getElementById('cancelAdminChanges');
+                    if (closeBtn) closeBtn.onclick = () => modal.remove();
+                    if (cancelBtn) cancelBtn.onclick = () => modal.remove();
+                    
+                    // Supprimer une activité
+                    document.querySelectorAll('.delete-activity').forEach((btn, idx) => {
+                        btn.onclick = () => {
+                            if (confirm('Êtes-vous sûr de vouloir supprimer cette activité ?')) {
+                                editableActivities.splice(idx, 1);
+                                renderModalContent();
+                            }
+                        };
+                    });
+                    
+                    // Supprimer un inscrit
+                    document.querySelectorAll('.remove-volunteer').forEach(btn => {
+                        btn.onclick = () => {
+                            if (confirm('Retirer cet inscrit ?')) {
+                                const activityIndex = parseInt(btn.closest('[data-activity-index]').getAttribute('data-activity-index'));
+                                const volunteerIndex = parseInt(btn.getAttribute('data-volunteer-index'));
+                                editableActivities[activityIndex].volunteers.splice(volunteerIndex, 1);
+                                renderModalContent();
+                            }
+                        };
+                    });
+                    
+                    // Ajouter un inscrit
+                    document.querySelectorAll('.add-volunteer').forEach(btn => {
+                        btn.onclick = () => {
+                            const input = btn.previousElementSibling;
+                            const name = input.value.trim();
+                            if (name) {
+                                const activityIndex = parseInt(btn.closest('[data-activity-index]').getAttribute('data-activity-index'));
+                                if (!editableActivities[activityIndex].volunteers) {
+                                    editableActivities[activityIndex].volunteers = [];
+                                }
+                                editableActivities[activityIndex].volunteers.push(name);
+                                input.value = '';
+                                renderModalContent();
+                            }
+                        };
+                    });
+                    
+                    // Mettre à jour les notes
+                    document.querySelectorAll('.activity-notes').forEach(input => {
+                        input.onchange = () => {
+                            const activityIndex = parseInt(input.closest('[data-activity-index]').getAttribute('data-activity-index'));
+                            editableActivities[activityIndex].notes = input.value;
+                        };
+                    });
+                    
+                    // Mettre à jour le statut urgent
+                    document.querySelectorAll('.activity-urgent').forEach(checkbox => {
+                        checkbox.onchange = () => {
+                            const activityIndex = parseInt(checkbox.closest('[data-activity-index]').getAttribute('data-activity-index'));
+                            editableActivities[activityIndex].is_urgent_when_free = checkbox.checked;
+                        };
+                    });
+                    
+                    // Afficher le formulaire d'ajout d'activité
+                    const showFormBtn = document.getElementById('showAddActivityForm');
+                    const addForm = document.getElementById('addActivityForm');
+                    if (showFormBtn && addForm) {
+                        showFormBtn.onclick = () => {
+                            showFormBtn.classList.add('hidden');
+                            addForm.classList.remove('hidden');
+                        };
+                    }
+                    
+                    // Annuler l'ajout d'activité
+                    const cancelAddBtn = document.getElementById('cancelAddActivity');
+                    if (cancelAddBtn) {
+                        cancelAddBtn.onclick = () => {
+                            addForm.classList.add('hidden');
+                            showFormBtn.classList.remove('hidden');
+                        };
+                    }
+                    
+                    // Confirmer l'ajout d'activité
+                    const confirmAddBtn = document.getElementById('confirmAddActivity');
+                    if (confirmAddBtn) {
+                        confirmAddBtn.onclick = () => {
+                            const type = document.getElementById('newActivityType').value;
+                            const notes = document.getElementById('newActivityNotes').value;
+                            
+                            // Créer la nouvelle activité
+                            const newActivity = {
+                                id: Date.now(), // ID temporaire
+                                date: dateStr,
+                                activity_type: type,
+                                notes: notes,
+                                volunteers: [],
+                                is_urgent_when_free: false,
+                                status: 'available'
+                            };
+                            
+                            editableActivities.push(newActivity);
+                            document.getElementById('newActivityNotes').value = '';
+                            addForm.classList.add('hidden');
+                            showFormBtn.classList.remove('hidden');
+                            renderModalContent();
+                        };
+                    }
+                    
+                    // Enregistrer les modifications
+                    const saveBtn = document.getElementById('saveAdminChanges');
+                    if (saveBtn) {
+                        saveBtn.onclick = async () => {
+                            saveBtn.disabled = true;
+                            saveBtn.textContent = 'Enregistrement...';
+                            
+                            try {
+                                // TODO: Appeler l'API pour sauvegarder les modifications
+                                // Pour l'instant, on va juste mettre à jour localement et recharger
+                                
+                                // Mettre à jour le schedule global
+                                editableActivities.forEach(editedActivity => {
+                                    const index = schedule.findIndex(s => s.id === editedActivity.id);
+                                    if (index !== -1) {
+                                        // Activité existante : mise à jour
+                                        schedule[index] = {...schedule[index], ...editedActivity};
+                                    } else {
+                                        // Nouvelle activité : ajout
+                                        schedule.push(editedActivity);
+                                    }
+                                });
+                                
+                                // Sauvegarder sur le serveur
+                                await axios.post('/api/schedule', schedule);
+                                
+                                // Fermer la modal et recharger
+                                modal.remove();
+                                await loadSchedule();
+                                renderCalendar();
+                                
+                                alert('✅ Modifications enregistrées !');
+                            } catch (error) {
+                                console.error('Erreur lors de la sauvegarde:', error);
+                                alert('❌ Erreur lors de la sauvegarde');
+                                saveBtn.disabled = false;
+                                saveBtn.textContent = 'Enregistrer';
+                            }
+                        };
+                    }
+                };
+                
+                renderModalContent();
                 modal.appendChild(modalContent);
                 document.body.appendChild(modal);
             }
