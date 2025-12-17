@@ -2335,9 +2335,12 @@ app.get('/', (c) => {
                     }
                 };
                 
-                renderModalContent();
+                // Ajouter le modal au DOM d'abord
                 modal.appendChild(modalContent);
                 document.body.appendChild(modal);
+                
+                // Puis rendre le contenu et attacher les événements
+                renderModalContent();
             }
             
             function changeMonth(direction) {
