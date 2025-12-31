@@ -1649,7 +1649,7 @@ app.get('/', (c) => {
                         '</div>' +
                         '<div class="flex items-start gap-2">' +
                             '<div class="w-5 h-5 bg-green-100 border-2 border-green-400 rounded flex items-center justify-center text-xs flex-shrink-0 mt-0.5">⭕</div>' +
-                            '<span class="text-gray-700 text-sm"><strong>Vert :</strong> C&apos;est dispo, mais Clément est là si besoin</span>' +
+                            '<span class="text-gray-700 text-sm"><strong>Vert :</strong> C&apos;est dispo</span>' +
                         '</div>' +
                         '<div class="flex items-start gap-2">' +
                             '<div class="w-5 h-5 bg-yellow-100 border-2 border-yellow-400 rounded flex items-center justify-center text-xs flex-shrink-0 mt-0.5">⚠️</div>' +
@@ -1874,9 +1874,9 @@ app.get('/', (c) => {
                                 namesDiv.className += ' text-red-600 font-bold';
                                 namesDiv.textContent = 'URGENT !';
                             } else if (volunteers.length === 0) {
-                                // Vert libre : afficher "Clément" en gris clair
+                                // Vert libre : afficher "Libre" en gris clair
                                 namesDiv.className += ' text-gray-500';
-                                namesDiv.textContent = 'Clément';
+                                namesDiv.textContent = 'Libre';
                             } else {
                                 // Bleu pris : afficher le(s) prénom(s) en gras
                                 namesDiv.className += ' font-semibold text-gray-800';
