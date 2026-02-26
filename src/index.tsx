@@ -2785,12 +2785,13 @@ app.get('/', (c) => {
                         scrollPositions[index] = container.scrollLeft;
                     });
                     
-                    // Sauvegarder sur le serveur
+                    // Sauvegarder sur le serveur (modification ciblée, pas de réécriture complète)
                     try {
-                        await axios.post('/api/schedule', schedule);
+                        await axios.post('/api/schedule/' + slotId + '/assign', { volunteer_name: currentUser });
                     } catch (saveError) {
                         console.error('Save error:', saveError);
                     }
+
                     
                     renderCalendar();
                     
@@ -2845,12 +2846,13 @@ app.get('/', (c) => {
                         scrollPositions[index] = container.scrollLeft;
                     });
                     
-                    // Sauvegarder sur le serveur
+                    // Sauvegarder sur le serveur (modification ciblée, pas de réécriture complète)
                     try {
-                        await axios.post('/api/schedule', schedule);
+                        await axios.post('/api/schedule/' + slotId + '/unassign', {});
                     } catch (saveError) {
                         console.error('Save error:', saveError);
                     }
+
                     
                     // Ajouter à l'historique
                     actionHistory.addAction({
