@@ -238,30 +238,96 @@ app.post('/api/schedule/:id/unassign', async (c) => {
   try {
     const db = c.env.DB;
     const slotId = parseInt(c.req.param('id'));
-    
-    console.log('🔄 Unassign API called:', { slotId });
+    const body = await c.req.json();
+    const volunteer_name = body.volunteer_name || null;
+
+    console.log('🔄 Unassign API called:', { slotId, volunteer_name });
 
     // Get the slot from D1
     const slot = await getScheduleById(db, slotId);
-    
+
     if (!slot) {
       console.log('❌ Créneau non trouvé:', slotId);
       return c.json({ error: 'Créneau non trouvé' }, 404);
     }
-    
-    // Update the slot
-    slot.volunteer_name = null;
-    slot.volunteers = [];
-    slot.status = slot.is_urgent_when_free ? 'urgent' : 'free';
-    
+
+    if (volunteer_name) {
+      // Retirer une personne spécifique
+      slot.volunteers = slot.volunteers.filter(v => v !== volunteer_name);
+    } else {
+      // Vider tout le monde (comportement legacy)
+      slot.volunteers = [];
+    }
+
+    // Mettre à jour volunteer_name pour compatibilité
+    slot.volunteer_name = slot.volunteers.length > 0 ? slot.volunteers[0] : null;
+
+    // Mettre à jour le statut
+    if (slot.volunteers.length === 0) {
+      slot.status = slot.is_urgent_when_free ? 'urgent' : 'free';
+    }
+
     await updateScheduleSlot(db, slotId, slot);
-    
-    console.log('💾 Créneau libéré:', { id: slotId });
+
+    console.log('💾 Créneau libéré:', { id: slotId, volunteer: volunteer_name });
     return c.json({ success: true, message: 'Désinscription réussie', slot });
-    
+
   } catch (error) {
     console.error('❌ Erreur API unassign:', error);
     return c.json({ error: 'Erreur lors de la désinscription: ' + error.message }, 500);
+  }
+});
+
+// API - Modifier un créneau existant
+app.put('/api/schedule/:id', async (c) => {
+  try {
+    const db = c.env.DB;
+    const slotId = parseInt(c.req.param('id'));
+    const updates = await c.req.json();
+
+    const slot = await getScheduleById(db, slotId);
+
+    if (!slot) {
+      return c.json({ error: 'Créneau non trouvé' }, 404);
+    }
+
+    // Appliquer les modifications fournies
+    if (updates.activity_type !== undefined) slot.activity_type = updates.activity_type;
+    if (updates.date !== undefined) slot.date = updates.date;
+    if (updates.time !== undefined) slot.time = updates.time;
+    if (updates.notes !== undefined) slot.notes = updates.notes;
+    if (updates.status !== undefined) slot.status = updates.status;
+    if (updates.is_urgent_when_free !== undefined) slot.is_urgent_when_free = updates.is_urgent_when_free;
+    if (updates.volunteers !== undefined) {
+      slot.volunteers = updates.volunteers;
+      slot.volunteer_name = updates.volunteers.length > 0 ? updates.volunteers[0] : null;
+    }
+
+    await updateScheduleSlot(db, slotId, slot);
+
+    return c.json({ success: true, message: 'Créneau mis à jour', slot });
+  } catch (error) {
+    return c.json({ error: 'Erreur lors de la mise à jour: ' + error.message }, 500);
+  }
+});
+
+// API - Supprimer un créneau
+app.delete('/api/schedule/:id', async (c) => {
+  try {
+    const db = c.env.DB;
+    const slotId = parseInt(c.req.param('id'));
+
+    const slot = await getScheduleById(db, slotId);
+
+    if (!slot) {
+      return c.json({ error: 'Créneau non trouvé' }, 404);
+    }
+
+    await deleteScheduleSlot(db, slotId);
+
+    return c.json({ success: true, message: 'Créneau supprimé' });
+  } catch (error) {
+    return c.json({ error: 'Erreur lors de la suppression: ' + error.message }, 500);
   }
 });
 
@@ -2227,33 +2293,47 @@ app.get('/', (c) => {
                         saveBtn.onclick = async () => {
                             saveBtn.disabled = true;
                             saveBtn.textContent = 'Enregistrement...';
-                            
+
                             try {
-                                // TODO: Appeler l'API pour sauvegarder les modifications
-                                // Pour l'instant, on va juste mettre à jour localement et recharger
-                                
-                                // Mettre à jour le schedule global
-                                editableActivities.forEach(editedActivity => {
-                                    const index = schedule.findIndex(s => s.id === editedActivity.id);
-                                    if (index !== -1) {
-                                        // Activité existante : mise à jour
-                                        schedule[index] = {...schedule[index], ...editedActivity};
-                                    } else {
-                                        // Nouvelle activité : ajout
-                                        schedule.push(editedActivity);
+                                // Comparer les activités éditées avec les originales
+                                for (const editedActivity of editableActivities) {
+                                    const original = activities.find(a => a.id === editedActivity.id);
+                                    if (!original) continue;
+
+                                    // Détecter les changements et envoyer un PUT
+                                    const changes = {};
+                                    if (editedActivity.notes !== original.notes) changes.notes = editedActivity.notes;
+                                    if (editedActivity.is_urgent_when_free !== original.is_urgent_when_free) changes.is_urgent_when_free = editedActivity.is_urgent_when_free;
+                                    if (JSON.stringify(editedActivity.volunteers) !== JSON.stringify(original.volunteers)) changes.volunteers = editedActivity.volunteers;
+
+                                    if (Object.keys(changes).length > 0) {
+                                        // Mettre à jour le statut si nécessaire
+                                        if (changes.volunteers && changes.volunteers.length === 0 && editedActivity.is_urgent_when_free) {
+                                            changes.status = 'urgent';
+                                        } else if (changes.volunteers && changes.volunteers.length > 0) {
+                                            changes.status = 'assigned';
+                                        } else if (changes.volunteers && changes.volunteers.length === 0) {
+                                            changes.status = 'free';
+                                        }
+
+                                        await axios.put('/api/schedule/' + editedActivity.id, changes);
                                     }
-                                });
-                                
-                                // Sauvegarder sur le serveur
-                                await axios.post('/api/schedule', schedule);
-                                
-                                // Fermer la modal et recharger
+                                }
+
+                                // Détecter les activités supprimées
+                                for (const original of activities) {
+                                    const stillExists = editableActivities.find(a => a.id === original.id);
+                                    if (!stillExists) {
+                                        await axios.delete('/api/schedule/' + original.id);
+                                    }
+                                }
+
+                                // Recharger et fermer
                                 modal.remove();
                                 await loadSchedule();
-                                renderCalendar();
                             } catch (error) {
                                 console.error('Erreur lors de la sauvegarde:', error);
-                                alert('❌ Erreur lors de la sauvegarde');
+                                alert('Erreur lors de la sauvegarde');
                                 saveBtn.disabled = false;
                                 saveBtn.textContent = 'Enregistrer';
                             }
@@ -2848,7 +2928,7 @@ app.get('/', (c) => {
                     
                     // Sauvegarder sur le serveur (modification ciblée, pas de réécriture complète)
                     try {
-                        await axios.post('/api/schedule/' + slotId + '/unassign', {});
+                        await axios.post('/api/schedule/' + slotId + '/unassign', { volunteer_name: currentUser });
                     } catch (saveError) {
                         console.error('Save error:', saveError);
                     }
@@ -2927,20 +3007,20 @@ app.get('/', (c) => {
                     
                     slot.status = 'assigned';
                     
-                    // Sauvegarder sur le serveur
+                    // Sauvegarder sur le serveur (appel ciblé, pas de réécriture complète)
                     try {
-                        await axios.post('/api/schedule', schedule);
+                        await axios.post('/api/schedule/' + slotId + '/assign', { volunteer_name: selectedVolunteer });
                     } catch (saveError) {
                         console.error('Save error:', saveError);
                     }
-                    
+
                     // Ajouter à l'historique
                     actionHistory.addAction({
                         type: 'admin_assign_slot',
                         data: { slotId: slotId, volunteer: selectedVolunteer, admin: currentUser },
                         undoData: { slotId: slotId, previousVolunteers: previousVolunteers }
                     });
-                    
+
                     updateUndoRedoButtons();
                     renderCalendar();
                     showError(selectedVolunteer + " ajouté à l'activité", 'text-green-600');
@@ -3001,20 +3081,20 @@ app.get('/', (c) => {
                         slot.status = slot.is_urgent_when_free ? 'urgent' : 'available';
                     }
                     
-                    // Sauvegarder sur le serveur
+                    // Sauvegarder sur le serveur (appel ciblé, pas de réécriture complète)
                     try {
-                        await axios.post('/api/schedule', schedule);
+                        await axios.post('/api/schedule/' + slotId + '/unassign', { volunteer_name: volunteerToRemove });
                     } catch (saveError) {
                         console.error('Save error:', saveError);
                     }
-                    
+
                     // Ajouter à l'historique
                     actionHistory.addAction({
                         type: 'admin_unassign_slot',
                         data: { slotId: slotId, volunteer: volunteerToRemove, admin: currentUser },
                         undoData: { slotId: slotId, previousVolunteers: previousVolunteers }
                     });
-                    
+
                     updateUndoRedoButtons();
                     renderCalendar();
                     showError(volunteerToRemove + " retiré de l'activité", 'text-orange-600');
@@ -3051,35 +3131,31 @@ app.get('/', (c) => {
                     
                     // Sauvegarder l'activité pour l'historique (undo)
                     const deletedActivity = { ...slot };
-                    
+
                     // Supprimer l'activité du planning
                     schedule = schedule.filter(s => s.id !== slotId);
-                    
-                    // Sauvegarder sur le serveur
-                    await axios.post('/api/schedule', schedule);
+
+                    // Sauvegarder sur le serveur (appel ciblé DELETE, pas de réécriture complète)
+                    await axios.delete('/api/schedule/' + slotId);
                     console.log('✅ Activity deletion saved to server');
-                    
-                    // Recharger depuis le serveur pour synchroniser
-                    const response = await axios.get('/api/schedule');
-                    schedule = response.data;
-                    
+
                     // Ajouter à l'historique
                     actionHistory.addAction({
                         type: 'delete_activity',
-                        data: { 
-                            slotId: slotId, 
+                        data: {
+                            slotId: slotId,
                             activityType: slot.activity_type,
                             date: slot.date,
-                            user: currentUser 
+                            user: currentUser
                         },
                         undoData: { deletedActivity: deletedActivity }
                     });
-                    
+
                     updateUndoRedoButtons();
                     renderCalendar();
-                    
+
                     showError('Activité "' + activityDesc + '" supprimée', 'text-red-600');
-                    
+
                 } catch (error) {
                     console.error('Erreur:', error);
                     showError("Erreur lors de la suppression de l'activité");
@@ -3120,32 +3196,35 @@ app.get('/', (c) => {
                         }
                     }
                     
-                    // Sauvegarder sur le serveur
+                    // Sauvegarder sur le serveur (appel ciblé PUT, pas de réécriture complète)
                     try {
-                        await axios.post('/api/schedule', schedule);
+                        await axios.put('/api/schedule/' + slotId, {
+                            is_urgent_when_free: newUrgentState,
+                            status: newUrgentState && (!slot.volunteers || slot.volunteers.length === 0) ? 'urgent' : slot.status
+                        });
                     } catch (saveError) {
                         console.error('Save error:', saveError);
                     }
-                    
+
                     // Ajouter à l'historique
                     actionHistory.addAction({
                         type: 'toggle_urgent',
-                        data: { 
-                            slotId: slotId, 
-                            newState: newUrgentState, 
+                        data: {
+                            slotId: slotId,
+                            newState: newUrgentState,
                             activityType: slot.activity_type,
                             date: slot.date,
-                            admin: currentUser 
+                            admin: currentUser
                         },
                         undoData: { slotId: slotId, oldState: wasUrgent }
                     });
-                    
+
                     updateUndoRedoButtons();
                     renderCalendar();
-                    
+
                     const statusText = newUrgentState ? 'marqué comme urgent' : 'retiré du mode urgent';
                     showError('Créneau ' + statusText, 'text-blue-600');
-                    
+
                 } catch (error) {
                     console.error('Erreur:', error);
                     showError("Erreur lors du changement d'urgence");
