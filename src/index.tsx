@@ -2872,9 +2872,9 @@ app.get('/', (c) => {
                         console.error('Save error:', saveError);
                     }
 
-                    
-                    renderCalendar();
-                    
+                    // Recharger le planning depuis le serveur pour garantir la synchronisation
+                    await loadSchedule();
+
                     // Restaurer les positions de scroll
                     setTimeout(() => {
                         document.querySelectorAll('.overflow-x-auto').forEach((container, index) => {
@@ -2883,7 +2883,7 @@ app.get('/', (c) => {
                             }
                         });
                     }, 50);
-                    
+
                     showError('Inscription réussie !', 'text-green-600');
                 } catch (error) {
                     console.error('Erreur:', error);
@@ -2933,17 +2933,17 @@ app.get('/', (c) => {
                         console.error('Save error:', saveError);
                     }
 
-                    
                     // Ajouter à l'historique
                     actionHistory.addAction({
                         type: 'unassign_slot',
                         data: { slotId: slotId, user: currentUser },
                         undoData: oldState
                     });
-                    
+
                     updateUndoRedoButtons();
-                    renderCalendar();
-                    
+                    // Recharger le planning depuis le serveur pour garantir la synchronisation
+                    await loadSchedule();
+
                     // Restaurer les positions de scroll
                     setTimeout(() => {
                         document.querySelectorAll('.overflow-x-auto').forEach((container, index) => {
@@ -2952,7 +2952,7 @@ app.get('/', (c) => {
                             }
                         });
                     }, 50);
-                    
+
                     showError('Désinscription réussie', 'text-orange-600');
                 } catch (error) {
                     console.error('Erreur:', error);
@@ -3022,7 +3022,8 @@ app.get('/', (c) => {
                     });
 
                     updateUndoRedoButtons();
-                    renderCalendar();
+                    // Recharger le planning depuis le serveur pour garantir la synchronisation
+                    await loadSchedule();
                     showError(selectedVolunteer + " ajouté à l'activité", 'text-green-600');
                 } catch (error) {
                     console.error('Erreur:', error);
@@ -3096,7 +3097,8 @@ app.get('/', (c) => {
                     });
 
                     updateUndoRedoButtons();
-                    renderCalendar();
+                    // Recharger le planning depuis le serveur pour garantir la synchronisation
+                    await loadSchedule();
                     showError(volunteerToRemove + " retiré de l'activité", 'text-orange-600');
                 } catch (error) {
                     console.error('Erreur:', error);
@@ -3152,7 +3154,8 @@ app.get('/', (c) => {
                     });
 
                     updateUndoRedoButtons();
-                    renderCalendar();
+                    // Recharger le planning depuis le serveur pour garantir la synchronisation
+                    await loadSchedule();
 
                     showError('Activité "' + activityDesc + '" supprimée', 'text-red-600');
 
@@ -3220,7 +3223,8 @@ app.get('/', (c) => {
                     });
 
                     updateUndoRedoButtons();
-                    renderCalendar();
+                    // Recharger le planning depuis le serveur pour garantir la synchronisation
+                    await loadSchedule();
 
                     const statusText = newUrgentState ? 'marqué comme urgent' : 'retiré du mode urgent';
                     showError('Créneau ' + statusText, 'text-blue-600');
