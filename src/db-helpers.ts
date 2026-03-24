@@ -354,6 +354,145 @@ export async function initializeScheduleIfEmpty(db: D1Database): Promise<void> {
   }
 }
 
+// ===== JOURNAL DES MODIFICATIONS (AUDIT LOG) =====
+
+export interface AuditLogEntry {
+  id: number;
+  timestamp: string;
+  action_type: string;
+  actor_name: string | null;
+  actor_ip: string | null;
+  slot_id: number | null;
+  slot_date: string | null;
+  slot_activity: string | null;
+  details: string;
+}
+
+// Labels lisibles pour chaque type d'action
+export const ACTION_LABELS: Record<string, string> = {
+  'inscription':           '📝 Inscription à un créneau',
+  'desinscription':        '🚫 Désinscription d\'un créneau',
+  'ajout_creneau':         '➕ Ajout d\'un créneau',
+  'modification_creneau':  '✏️ Modification d\'un créneau',
+  'suppression_creneau':   '🗑️ Suppression d\'un créneau',
+  'reset_database':        '⚠️ Réinitialisation de la base',
+  'restauration_backup':   '🔄 Restauration d\'un backup',
+  'creation_backup':       '💾 Création d\'un backup',
+};
+
+/**
+ * Enregistre une entrée dans le journal des modifications
+ */
+export async function logAction(
+  db: D1Database,
+  params: {
+    action_type: string;
+    actor_name?: string | null;
+    actor_ip?: string | null;
+    slot_id?: number | null;
+    slot_date?: string | null;
+    slot_activity?: string | null;
+    details: string;
+  }
+): Promise<void> {
+  try {
+    await db.prepare(`
+      INSERT INTO audit_log (action_type, actor_name, actor_ip, slot_id, slot_date, slot_activity, details)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      params.action_type,
+      params.actor_name || null,
+      params.actor_ip || null,
+      params.slot_id || null,
+      params.slot_date || null,
+      params.slot_activity || null,
+      params.details
+    ).run();
+  } catch (error) {
+    // On ne bloque jamais l'action principale si le log échoue
+    console.error('⚠️ Erreur lors de l\'enregistrement dans audit_log:', error);
+  }
+}
+
+/**
+ * Récupère les entrées du journal (les plus récentes en premier)
+ */
+export async function getAuditLog(
+  db: D1Database,
+  options: {
+    limit?: number;
+    offset?: number;
+    action_type?: string;
+    actor_name?: string;
+  } = {}
+): Promise<{ entries: AuditLogEntry[]; total: number }> {
+  const limit = options.limit || 50;
+  const offset = options.offset || 0;
+
+  // Construire les conditions WHERE dynamiquement
+  const conditions: string[] = [];
+  const bindings: any[] = [];
+
+  if (options.action_type) {
+    conditions.push('action_type = ?');
+    bindings.push(options.action_type);
+  }
+  if (options.actor_name) {
+    conditions.push('actor_name LIKE ?');
+    bindings.push(`%${options.actor_name}%`);
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  // Compter le total
+  const countResult = await db.prepare(`
+    SELECT COUNT(*) as total FROM audit_log ${whereClause}
+  `).bind(...bindings).first();
+  const total = (countResult as any)?.total || 0;
+
+  // Récupérer les entrées (sans actor_ip — visible uniquement via Cloudflare)
+  const result = await db.prepare(`
+    SELECT id, timestamp, action_type, actor_name, slot_id, slot_date, slot_activity, details
+    FROM audit_log
+    ${whereClause}
+    ORDER BY timestamp DESC
+    LIMIT ? OFFSET ?
+  `).bind(...bindings, limit, offset).all();
+
+  return {
+    entries: result.results as any[],
+    total
+  };
+}
+
+/**
+ * Nettoie les anciennes entrées du journal (garde les N dernières)
+ */
+export async function cleanOldAuditLog(db: D1Database, keepCount: number = 500): Promise<number> {
+  const result = await db.prepare(`
+    DELETE FROM audit_log
+    WHERE id NOT IN (
+      SELECT id FROM audit_log ORDER BY timestamp DESC LIMIT ?
+    )
+  `).bind(keepCount).run();
+
+  const deleted = result.meta.changes || 0;
+  if (deleted > 0) {
+    console.log(`🗑️ ${deleted} ancienne(s) entrée(s) de journal supprimée(s)`);
+  }
+  return deleted;
+}
+
+/**
+ * Extrait l'adresse IP réelle depuis les headers Cloudflare
+ */
+export function extractIp(request: Request): string | null {
+  // CF-Connecting-IP est injecté automatiquement par Cloudflare
+  return request.headers.get('CF-Connecting-IP')
+    || request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim()
+    || null;
+}
+
 // ===== AUTO-GESTION DES SEMAINES =====
 
 /**
