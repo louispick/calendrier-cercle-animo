@@ -14,7 +14,11 @@ import {
   getBackupById,
   restoreBackup,
   cleanOldBackups,
-  autoManageWeeks
+  autoManageWeeks,
+  logAction,
+  getAuditLog,
+  cleanOldAuditLog,
+  extractIp
 } from './db-helpers'
 
 type Bindings = {
@@ -223,6 +227,17 @@ app.post('/api/schedule/:id/assign', async (c) => {
     }
     
     await updateScheduleSlot(db, slotId, slot);
+
+    // 📋 Journal des modifications
+    await logAction(db, {
+      action_type: 'inscription',
+      actor_name: volunteer_name || null,
+      actor_ip: extractIp(c.req.raw),
+      slot_id: slotId,
+      slot_date: slot.date,
+      slot_activity: slot.activity_type,
+      details: `Inscription de "${volunteer_name || 'Anonyme'}" au créneau ${slot.activity_type} du ${slot.date}`
+    });
     
     console.log('💾 Créneau assigné:', { id: slotId, volunteer: volunteer_name });
     return c.json({ success: true, message: 'Inscription réussie', slot });
@@ -269,6 +284,19 @@ app.post('/api/schedule/:id/unassign', async (c) => {
 
     await updateScheduleSlot(db, slotId, slot);
 
+    // 📋 Journal des modifications
+    await logAction(db, {
+      action_type: 'desinscription',
+      actor_name: volunteer_name || null,
+      actor_ip: extractIp(c.req.raw),
+      slot_id: slotId,
+      slot_date: slot.date,
+      slot_activity: slot.activity_type,
+      details: volunteer_name
+        ? `Désinscription de "${volunteer_name}" du créneau ${slot.activity_type} du ${slot.date}`
+        : `Désinscription complète du créneau ${slot.activity_type} du ${slot.date}`
+    });
+
     console.log('💾 Créneau libéré:', { id: slotId, volunteer: volunteer_name });
     return c.json({ success: true, message: 'Désinscription réussie', slot });
 
@@ -305,6 +333,18 @@ app.put('/api/schedule/:id', async (c) => {
 
     await updateScheduleSlot(db, slotId, slot);
 
+    // 📋 Journal des modifications
+    const actor_name = updates.actor_name || updates.volunteer_name || null;
+    await logAction(db, {
+      action_type: 'modification_creneau',
+      actor_name: actor_name,
+      actor_ip: extractIp(c.req.raw),
+      slot_id: slotId,
+      slot_date: slot.date,
+      slot_activity: slot.activity_type,
+      details: `Modification du créneau ${slot.activity_type} du ${slot.date}${actor_name ? ` par "${actor_name}"` : ''}`
+    });
+
     return c.json({ success: true, message: 'Créneau mis à jour', slot });
   } catch (error) {
     return c.json({ error: 'Erreur lors de la mise à jour: ' + error.message }, 500);
@@ -322,6 +362,17 @@ app.delete('/api/schedule/:id', async (c) => {
     if (!slot) {
       return c.json({ error: 'Créneau non trouvé' }, 404);
     }
+
+    // 📋 Journal avant suppression (on garde les infos du créneau)
+    await logAction(db, {
+      action_type: 'suppression_creneau',
+      actor_name: null,
+      actor_ip: extractIp(c.req.raw),
+      slot_id: slotId,
+      slot_date: slot.date,
+      slot_activity: slot.activity_type,
+      details: `Suppression du créneau ${slot.activity_type} du ${slot.date}${slot.volunteers?.length > 0 ? ` (bénévoles inscrits : ${slot.volunteers.join(', ')})` : ''}`
+    });
 
     await deleteScheduleSlot(db, slotId);
 
@@ -373,6 +424,10 @@ app.post('/api/reset-database', async (c) => {
     const currentSchedule = await getAllSchedule(db);
     await createBackup(db, currentSchedule, 'pre_reset', 'Backup avant réinitialisation complète');
     
+    // 📋 Journal des modifications
+    const resetBody = await c.req.json().catch(() => ({}));
+    const resetActor = resetBody.actor_name || null;
+
     // Clear all data
     await db.prepare('DELETE FROM schedule').run();
     
@@ -380,6 +435,13 @@ app.post('/api/reset-database', async (c) => {
     await initializeScheduleIfEmpty(db);
     
     const newSchedule = await getAllSchedule(db);
+
+    await logAction(db, {
+      action_type: 'reset_database',
+      actor_name: resetActor,
+      actor_ip: extractIp(c.req.raw),
+      details: `Réinitialisation complète de la base de données${resetActor ? ` par "${resetActor}"` : ''} — ${newSchedule.length} créneaux recréés`
+    });
     
     return c.json({ 
       success: true, 
@@ -415,8 +477,17 @@ app.post('/api/backups/create', async (c) => {
     const body = await c.req.json();
     const description = body.description || 'Backup manuel';
     
+    const actor_backup = body.actor_name || null;
     const currentSchedule = await getAllSchedule(db);
     const backupId = await createBackup(db, currentSchedule, 'manual', description);
+
+    // 📋 Journal des modifications
+    await logAction(db, {
+      action_type: 'creation_backup',
+      actor_name: actor_backup,
+      actor_ip: extractIp(c.req.raw),
+      details: `Création manuelle d'un backup${actor_backup ? ` par "${actor_backup}"` : ''} — ${currentSchedule.length} créneaux sauvegardés (backup #${backupId})`
+    });
     
     return c.json({ 
       success: true, 
@@ -436,6 +507,9 @@ app.post('/api/backups/:id/restore', async (c) => {
     const db = c.env.DB;
     const backupId = parseInt(c.req.param('id'));
     
+    const restoreBody = await c.req.json().catch(() => ({}));
+    const restoreActor = restoreBody.actor_name || null;
+
     const success = await restoreBackup(db, backupId);
     
     if (!success) {
@@ -443,6 +517,14 @@ app.post('/api/backups/:id/restore', async (c) => {
     }
     
     const restoredSchedule = await getAllSchedule(db);
+
+    // 📋 Journal des modifications
+    await logAction(db, {
+      action_type: 'restauration_backup',
+      actor_name: restoreActor,
+      actor_ip: extractIp(c.req.raw),
+      details: `Restauration du backup #${backupId}${restoreActor ? ` par "${restoreActor}"` : ''} — ${restoredSchedule.length} créneaux restaurés`
+    });
     
     return c.json({ 
       success: true, 
@@ -544,6 +626,55 @@ app.post('/api/migrate-weeks', async (c) => {
   } catch (error) {
     console.error('Erreur migration:', error);
     return c.json({ error: 'Echec migration: ' + error.message }, 500);
+  }
+});
+
+// API - Enregistrer manuellement une entrée dans le journal (depuis le frontend)
+app.post('/api/audit-log/record', async (c) => {
+  try {
+    const db = c.env.DB;
+    const body = await c.req.json();
+
+    await logAction(db, {
+      action_type: body.action_type || 'autre',
+      actor_name: body.actor_name || null,
+      actor_ip: extractIp(c.req.raw),
+      slot_id: body.slot_id || null,
+      slot_date: body.slot_date || null,
+      slot_activity: body.slot_activity || null,
+      details: body.details || ''
+    });
+
+    return c.json({ success: true });
+  } catch (error) {
+    console.error('❌ Erreur enregistrement audit-log:', error);
+    return c.json({ error: 'Erreur: ' + error.message }, 500);
+  }
+});
+
+// API - Journal des modifications (Admin seulement côté frontend)
+app.get('/api/audit-log', async (c) => {
+  try {
+    const db = c.env.DB;
+    const url = new URL(c.req.url);
+
+    const limit  = parseInt(url.searchParams.get('limit')  || '50');
+    const offset = parseInt(url.searchParams.get('offset') || '0');
+    const action_type  = url.searchParams.get('action_type')  || undefined;
+    const actor_name   = url.searchParams.get('actor_name')   || undefined;
+
+    const { entries, total } = await getAuditLog(db, { limit, offset, action_type, actor_name });
+
+    return c.json({
+      success: true,
+      entries,
+      total,
+      limit,
+      offset
+    });
+  } catch (error) {
+    console.error('❌ Erreur lecture audit-log:', error);
+    return c.json({ error: 'Échec lecture journal: ' + error.message }, 500);
   }
 });
 
@@ -967,6 +1098,69 @@ app.get('/', (c) => {
                         <i class="fas fa-plus-circle mr-2"></i>
                         Ajouter Activite
                     </button>
+                    <button id="auditLogBtn" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors">
+                        <i class="fas fa-history mr-2"></i>
+                        Journal des modifications
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal Journal des modifications -->
+            <div id="auditLogModal" class="modal hidden fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4">
+                <div class="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-screen flex flex-col" style="max-height:90vh">
+                    <!-- En-tête -->
+                    <div class="flex justify-between items-center p-5 border-b">
+                        <h3 class="text-lg font-bold text-indigo-700">
+                            <i class="fas fa-history mr-2"></i>
+                            Journal des modifications
+                        </h3>
+                        <button id="closeAuditLogModal" class="text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
+                    </div>
+
+                    <!-- Filtres -->
+                    <div class="p-4 border-b bg-gray-50 flex flex-wrap gap-3 items-end">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Type d&apos;action</label>
+                            <select id="auditFilterType" class="px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                                <option value="">Toutes les actions</option>
+                                <option value="inscription">Inscriptions</option>
+                                <option value="desinscription">Désinscriptions</option>
+                                <option value="ajout_creneau">Ajouts de créneau</option>
+                                <option value="modification_creneau">Modifications</option>
+                                <option value="suppression_creneau">Suppressions</option>
+                                <option value="reset_database">Réinitialisations</option>
+                                <option value="restauration_backup">Restaurations backup</option>
+                                <option value="creation_backup">Créations backup</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Rechercher par nom</label>
+                            <input type="text" id="auditFilterName" placeholder="Prénom..." class="px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 w-36">
+                        </div>
+                        <button id="auditApplyFilters" class="px-4 py-1.5 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-700 transition-colors">
+                            <i class="fas fa-search mr-1"></i> Filtrer
+                        </button>
+                        <button id="auditResetFilters" class="px-4 py-1.5 bg-gray-300 text-gray-700 rounded text-sm hover:bg-gray-400 transition-colors">
+                            Réinitialiser
+                        </button>
+                        <span id="auditTotalCount" class="text-sm text-gray-500 ml-auto"></span>
+                    </div>
+
+                    <!-- Liste des entrées -->
+                    <div id="auditLogList" class="overflow-y-auto flex-1 p-4 space-y-2">
+                        <p class="text-center text-gray-400 py-8">Chargement...</p>
+                    </div>
+
+                    <!-- Pagination -->
+                    <div class="p-4 border-t flex items-center justify-between bg-gray-50">
+                        <button id="auditPrevPage" class="px-3 py-1.5 bg-gray-200 text-gray-700 rounded text-sm hover:bg-gray-300 disabled:opacity-40 disabled:cursor-not-allowed" disabled>
+                            &larr; Précédent
+                        </button>
+                        <span id="auditPageInfo" class="text-sm text-gray-500">Page 1</span>
+                        <button id="auditNextPage" class="px-3 py-1.5 bg-gray-200 text-gray-700 rounded text-sm hover:bg-gray-300 disabled:opacity-40 disabled:cursor-not-allowed" disabled>
+                            Suivant &rarr;
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -1515,6 +1709,7 @@ app.get('/', (c) => {
                 
                 // Admin panel buttons - may not exist yet
                 safeAddListener('addActivityBtn', 'click', openAddActivityModal);
+                safeAddListener('auditLogBtn', 'click', openAuditLogModal);
                 
                 // Modal event listeners - Add Activity
                 safeAddListener('closeAddActivityModal', 'click', closeAddActivityModal);
@@ -1563,6 +1758,27 @@ app.get('/', (c) => {
                 if (historyModal) {
                     historyModal.addEventListener('click', (e) => {
                         if (e.target.id === 'historyModal') closeHistoryModal();
+                    });
+                }
+
+                // Modal Journal des modifications
+                safeAddListener('closeAuditLogModal', 'click', closeAuditLogModal);
+                safeAddListener('auditApplyFilters', 'click', () => loadAuditLog(0));
+                safeAddListener('auditResetFilters', 'click', () => {
+                    document.getElementById('auditFilterType').value = '';
+                    document.getElementById('auditFilterName').value = '';
+                    loadAuditLog(0);
+                });
+                safeAddListener('auditPrevPage', 'click', () => {
+                    if (auditCurrentOffset > 0) loadAuditLog(auditCurrentOffset - auditPageSize);
+                });
+                safeAddListener('auditNextPage', 'click', () => {
+                    loadAuditLog(auditCurrentOffset + auditPageSize);
+                });
+                const auditLogModal = document.getElementById('auditLogModal');
+                if (auditLogModal) {
+                    auditLogModal.addEventListener('click', (e) => {
+                        if (e.target.id === 'auditLogModal') closeAuditLogModal();
                     });
                 }
                 
@@ -3775,6 +3991,122 @@ app.get('/', (c) => {
                 document.getElementById('historyModal').classList.add('hidden');
             }
 
+            // ===== JOURNAL DES MODIFICATIONS =====
+
+            let auditCurrentOffset = 0;
+            const auditPageSize = 25;
+            let auditTotalEntries = 0;
+
+            // Icônes et couleurs par type d'action
+            const auditActionStyles = {
+                'inscription':           { icon: '📝', color: 'bg-green-50 border-green-200 text-green-800' },
+                'desinscription':        { icon: '🚫', color: 'bg-orange-50 border-orange-200 text-orange-800' },
+                'ajout_creneau':         { icon: '➕', color: 'bg-blue-50 border-blue-200 text-blue-800' },
+                'modification_creneau':  { icon: '✏️', color: 'bg-yellow-50 border-yellow-200 text-yellow-800' },
+                'suppression_creneau':   { icon: '🗑️', color: 'bg-red-50 border-red-200 text-red-800' },
+                'reset_database':        { icon: '⚠️', color: 'bg-red-100 border-red-400 text-red-900' },
+                'restauration_backup':   { icon: '🔄', color: 'bg-purple-50 border-purple-200 text-purple-800' },
+                'creation_backup':       { icon: '💾', color: 'bg-indigo-50 border-indigo-200 text-indigo-800' },
+            };
+
+            function formatAuditDate(timestamp) {
+                try {
+                    // Le timestamp vient de SQLite en UTC : "2026-03-24 14:32:00"
+                    const d = new Date(timestamp.replace(' ', 'T') + 'Z');
+                    return d.toLocaleString('fr-FR', {
+                        day: '2-digit', month: '2-digit', year: 'numeric',
+                        hour: '2-digit', minute: '2-digit'
+                    });
+                } catch (e) {
+                    return timestamp;
+                }
+            }
+
+            function openAuditLogModal() {
+                document.getElementById('auditLogModal').classList.remove('hidden');
+                auditCurrentOffset = 0;
+                loadAuditLog(0);
+            }
+
+            function closeAuditLogModal() {
+                document.getElementById('auditLogModal').classList.add('hidden');
+            }
+
+            async function loadAuditLog(offset) {
+                auditCurrentOffset = offset;
+                const list = document.getElementById('auditLogList');
+                list.innerHTML = '<p class="text-center text-gray-400 py-8"><i class="fas fa-spinner fa-spin mr-2"></i>Chargement...</p>';
+
+                try {
+                    const filterType = document.getElementById('auditFilterType').value;
+                    const filterName = document.getElementById('auditFilterName').value.trim();
+
+                    let url = '/api/audit-log?limit=' + auditPageSize + '&offset=' + offset;
+                    if (filterType) url += '&action_type=' + encodeURIComponent(filterType);
+                    if (filterName) url += '&actor_name=' + encodeURIComponent(filterName);
+
+                    const resp = await fetch(url);
+                    const data = await resp.json();
+
+                    if (!data.success) {
+                        list.innerHTML = '<p class="text-center text-red-500 py-8">Erreur lors du chargement du journal.</p>';
+                        return;
+                    }
+
+                    auditTotalEntries = data.total;
+                    const entries = data.entries;
+
+                    // Mettre à jour le compteur
+                    document.getElementById('auditTotalCount').textContent =
+                        auditTotalEntries + ' modification' + (auditTotalEntries > 1 ? 's' : '') + ' au total';
+
+                    // Mettre à jour la pagination
+                    const pageNum = Math.floor(offset / auditPageSize) + 1;
+                    const totalPages = Math.ceil(auditTotalEntries / auditPageSize) || 1;
+                    document.getElementById('auditPageInfo').textContent = 'Page ' + pageNum + ' / ' + totalPages;
+                    document.getElementById('auditPrevPage').disabled = offset <= 0;
+                    document.getElementById('auditNextPage').disabled = (offset + auditPageSize) >= auditTotalEntries;
+
+                    if (entries.length === 0) {
+                        list.innerHTML = '<p class="text-center text-gray-400 py-8">Aucune modification trouvée.</p>';
+                        return;
+                    }
+
+                    list.innerHTML = '';
+                    entries.forEach(entry => {
+                        const style = auditActionStyles[entry.action_type] || { icon: '🔹', color: 'bg-gray-50 border-gray-200 text-gray-700' };
+                        const actorDisplay = entry.actor_name
+                            ? '<span class="font-semibold">' + escapeHtml(entry.actor_name) + '</span>'
+                            : '<span class="italic text-gray-400">Anonyme</span>';
+
+                        const div = document.createElement('div');
+                        div.className = 'border rounded-lg p-3 ' + style.color;
+                        div.innerHTML =
+                            '<div class="flex items-start justify-between gap-2">' +
+                                '<div class="flex items-start gap-2 flex-1">' +
+                                    '<span class="text-lg leading-none mt-0.5">' + style.icon + '</span>' +
+                                    '<div class="flex-1 min-w-0">' +
+                                        '<p class="text-sm font-medium leading-snug">' + escapeHtml(entry.details) + '</p>' +
+                                        '<p class="text-xs mt-1 opacity-70">Par ' + actorDisplay + '</p>' +
+                                    '</div>' +
+                                '</div>' +
+                                '<span class="text-xs opacity-60 whitespace-nowrap shrink-0">' + formatAuditDate(entry.timestamp) + '</span>' +
+                            '</div>';
+                        list.appendChild(div);
+                    });
+
+                } catch (err) {
+                    list.innerHTML = '<p class="text-center text-red-500 py-8">Erreur réseau : ' + err.message + '</p>';
+                }
+            }
+
+            function escapeHtml(text) {
+                if (!text) return '';
+                return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            }
+
+            // ===== FIN JOURNAL DES MODIFICATIONS =====
+
             function openAddActivityModal() {
                 // Réinitialiser le formulaire
                 document.getElementById('addActivityForm').reset();
@@ -3901,6 +4233,18 @@ app.get('/', (c) => {
                     try {
                         await axios.post('/api/schedule', schedule);
                         console.log('✅ Activity saved to server');
+                        // 📋 Journal des modifications - ajout d'un créneau
+                        await fetch('/api/audit-log/record', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                action_type: 'ajout_creneau',
+                                actor_name: currentUser || null,
+                                slot_date: newActivity.date,
+                                slot_activity: newActivity.activity_type,
+                                details: 'Ajout du créneau "' + newActivity.activity_type + '" le ' + newActivity.date + (currentUser ? ' par "' + currentUser + '"' : '')
+                            })
+                        }).catch(() => {}); // Ne bloque pas si le log échoue
                     } catch (saveError) {
                         console.error('⚠️ Save error:', saveError);
                         // L'activité reste dans le planning local même si la sauvegarde échoue
